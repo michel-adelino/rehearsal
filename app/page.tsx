@@ -414,18 +414,19 @@ export default function Home() {
       return;
     }
 
-    // Check for dancer conflicts
+    // Check for dancer conflicts (also triggers modal state via hook)
     const hasConflicts = checkConflicts(otherRoutines, updatedRoutine, rooms);
     
-    // Move the routine in state (don't save to database yet)
-    setScheduledRoutines(prev => prev.map(sr => 
-      sr.id === routine.id ? updatedRoutine : sr
-    ));
-    
     if (hasConflicts) {
-      console.log('Routine moved with conflicts - conflicts will be shown in sidebar');
+      // Don't apply move yet; store as pending and wait for user decision via modal
+      setPendingScheduledRoutine(updatedRoutine);
+      setPendingRoutine(routine.routine);
+      console.log('Move has conflicts - awaiting user decision');
+      return;
     }
-    
+
+    // No conflicts: apply move
+    setScheduledRoutines(prev => prev.map(sr => sr.id === routine.id ? updatedRoutine : sr));
     console.log('Routine moved (not saved yet)');
   }, [scheduledRoutines, checkConflicts, rooms]);
 
@@ -445,6 +446,49 @@ export default function Home() {
     console.log('Scheduled routine removed (not deleted from database yet)');
   }, []);
 
+  // Update duration for a scheduled rehearsal
+  const handleUpdateScheduledRoutineDuration = useCallback((id: string, newDuration: number) => {
+    if (!Number.isFinite(newDuration) || newDuration < 1) {
+      toast.error('Duration must be at least 1 minute');
+      return;
+    }
+
+    const current = scheduledRoutines.find(sr => sr.id === id);
+    if (!current) return;
+
+    const updated: ScheduledRoutine = {
+      ...current,
+      duration: newDuration,
+      endTime: addMinutesToTime(current.startTime, newDuration),
+    };
+
+    // Exclude current from conflict checks
+    const others = scheduledRoutines.filter(sr => sr.id !== id);
+
+    // Room conflict check
+    const roomConflict = checkRoomConflict(others, updated);
+    if (roomConflict) {
+      const roomName = rooms.find(r => r.id === updated.roomId)?.name || 'Studio';
+      const conflictTime = formatTime(roomConflict.startTime.hour, roomConflict.startTime.minute);
+      toast.error(`${roomName} already has "${roomConflict.routine.songTitle}" scheduled at ${conflictTime}.`);
+      return;
+    }
+
+    // Dancer conflicts
+    const hasConflicts = findConflicts(others, updated, rooms).length > 0;
+    if (hasConflicts) {
+      toast.error('Changing duration causes dancer conflicts.');
+      return;
+    }
+
+    // Apply update
+    setScheduledRoutines(prev => prev.map(sr => sr.id === id ? updated : sr));
+    // Keep modal selection in sync
+    setSelectedScheduledRoutine(prev => prev && prev.id === id ? updated : prev);
+
+    toast.success('Rehearsal duration updated');
+  }, [scheduledRoutines, rooms]);
+
   const handleResolveConflicts = useCallback(() => {
     // User clicked "Schedule Anyway" - add the pending routine
     if (pendingScheduledRoutine && pendingRoutine) {
@@ -454,18 +498,26 @@ export default function Home() {
       const currentCount = scheduledRoutines.filter(sr => sr.routineId === pendingRoutine.id).length;
       const newCount = currentCount + 1;
       
-      // Add to state (don't save to database yet)
+      // Apply pending: if it's an existing routine being moved, replace; else add
       setScheduledRoutines(prev => {
-        const updated = [...prev, pendingScheduledRoutine];
-        return updated;
+        const existsIndex = prev.findIndex(sr => sr.id === pendingScheduledRoutine.id);
+        if (existsIndex !== -1) {
+          const copy = [...prev];
+          copy[existsIndex] = pendingScheduledRoutine;
+          return copy;
+        }
+        return [...prev, pendingScheduledRoutine];
       });
       
-      // Update routine's scheduled hours (temporary)
+      // Update routine's scheduled hours (temporary) only if it was a new add (not a move)
+      const wasNew = !scheduledRoutines.some(sr => sr.id === pendingScheduledRoutine.id);
+      if (wasNew) {
       setRoutines(prev => prev.map(r => 
         r.id === pendingRoutine.id 
           ? { ...r, scheduledHours: r.scheduledHours + (pendingRoutine.duration / 60) }
           : r
       ));
+      }
       
       // Show notification if routine has reached 6 scheduled times
       if (newCount === 6) {
@@ -868,6 +920,7 @@ export default function Home() {
                   visibleRooms={visibleRooms}
                   hasUnsavedChanges={hasUnsavedChanges}
                   onSaveChanges={handleSaveScheduleChanges}
+                  onResizeRoutineDuration={(routine, minutes) => handleUpdateScheduledRoutineDuration(routine.id, minutes)}
                 />
               )}
         </div>
@@ -929,6 +982,7 @@ export default function Home() {
             setShowScheduledDancersModal(false);
             setSelectedScheduledRoutine(null);
           }}
+          onUpdateDuration={handleUpdateScheduledRoutineDuration}
         />
 
         <CsvImportModal

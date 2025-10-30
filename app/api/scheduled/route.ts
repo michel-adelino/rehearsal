@@ -25,17 +25,24 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const { date, startMinutes, duration, routineId, roomId } = body;
 
-  const created = await prisma.scheduledRoutine.create({
-    data: {
-      date: new Date(date),
-      startMinutes,
-      duration,
-      routineId,
-      roomId,
-    },
-    include: { routine: { include: { teacher: true, genre: true, dancers: true } }, room: true },
-  });
-  return NextResponse.json(created, { status: 201 });
+  try {
+    const created = await prisma.scheduledRoutine.create({
+      data: {
+        date: new Date(date),
+        startMinutes,
+        duration,
+        routineId,
+        roomId,
+      },
+      include: { routine: { include: { teacher: true, genre: true, dancers: true } }, room: true },
+    });
+    return NextResponse.json(created, { status: 201 });
+  } catch (e: any) {
+    if (e?.code === 'P2002') {
+      return NextResponse.json({ error: 'Time slot already occupied for this room and date.' }, { status: 409 });
+    }
+    return NextResponse.json({ error: 'Failed to create scheduled routine' }, { status: 500 });
+  }
 }
 
 

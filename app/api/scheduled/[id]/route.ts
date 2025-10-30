@@ -8,18 +8,25 @@ export async function PATCH(
   const body = await req.json();
   const { date, startMinutes, duration, routineId, roomId } = body;
 
-  const updated = await prisma.scheduledRoutine.update({
-    where: { id: params.id },
-    data: {
-      ...(date ? { date: new Date(date) } : {}),
-      ...(typeof startMinutes === 'number' ? { startMinutes } : {}),
-      ...(typeof duration === 'number' ? { duration } : {}),
-      ...(routineId ? { routineId } : {}),
-      ...(roomId ? { roomId } : {}),
-    },
-    include: { routine: { include: { teacher: true, genre: true, dancers: true } }, room: true },
-  });
-  return NextResponse.json(updated);
+  try {
+    const updated = await prisma.scheduledRoutine.update({
+      where: { id: params.id },
+      data: {
+        ...(date ? { date: new Date(date) } : {}),
+        ...(typeof startMinutes === 'number' ? { startMinutes } : {}),
+        ...(typeof duration === 'number' ? { duration } : {}),
+        ...(routineId ? { routineId } : {}),
+        ...(roomId ? { roomId } : {}),
+      },
+      include: { routine: { include: { teacher: true, genre: true, dancers: true } }, room: true },
+    });
+    return NextResponse.json(updated);
+  } catch (e: any) {
+    if (e?.code === 'P2002') {
+      return NextResponse.json({ error: 'Time slot already occupied for this room and date.' }, { status: 409 });
+    }
+    return NextResponse.json({ error: 'Failed to update scheduled routine' }, { status: 500 });
+  }
 }
 
 export async function DELETE(

@@ -15,6 +15,7 @@ interface TimeSlotProps {
   isCurrentTime?: boolean;
   hasConflict?: boolean;
   children?: React.ReactNode;
+  heightPx?: number;
 }
 
 export const TimeSlot: React.FC<TimeSlotProps> = ({
@@ -26,7 +27,8 @@ export const TimeSlot: React.FC<TimeSlotProps> = ({
   onMoveRoutine,
   isCurrentTime = false,
   hasConflict = false,
-  children
+  children,
+  heightPx = 64
 }) => {
   const [{ isOver, canDrop }, drop] = useDrop({
     accept: ['routine', 'scheduled-routine'],
@@ -74,22 +76,23 @@ export const TimeSlot: React.FC<TimeSlotProps> = ({
     <div
       ref={ref}
       className={`
-        h-16 border-b border-gray-200 relative cursor-pointer
+        border-b border-gray-200 relative cursor-pointer
         ${isCurrentTime ? 'bg-red-50 border-red-200' : 'bg-white'}
-        ${hasConflict ? 'bg-red-200 border-2 border-red-500 shadow-lg' : ''}
         ${isOver && canDrop ? 'bg-blue-100 border-blue-300' : ''}
         ${canDrop ? 'hover:bg-gray-50' : ''}
       `}
+      style={{ height: `${heightPx}px` }}
     >
       {/* Current time indicator */}
       {isCurrentTime && (
         <div className="absolute left-0 top-0 w-full h-0.5 bg-red-500 z-10" />
       )}
       
-      {/* Conflict indicator */}
+      {/* Conflict overlay outline above blocks */}
       {hasConflict && (
-        <div className="absolute top-0 right-0 w-4 h-4 bg-red-600 rounded-full flex items-center justify-center">
-          <span className="text-white text-xs font-bold">!</span>
+        <div className="pointer-events-none absolute inset-0 z-20">
+          <div className="absolute inset-0 border-2 border-red-500 rounded-sm"></div>
+          <div className="absolute inset-0 ring-2 ring-red-300/40 rounded-sm"></div>
         </div>
       )}
       

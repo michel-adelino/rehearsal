@@ -20,6 +20,7 @@ interface CalendarGridProps {
   visibleRooms: number;
   hasUnsavedChanges?: boolean;
   onSaveChanges?: () => void;
+  onResizeRoutineDuration?: (routine: ScheduledRoutine, newDuration: number) => void;
 }
 
 type ViewMode = 'day' | '4days' | 'week' | 'month';
@@ -33,7 +34,8 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
   onDeleteRoutine,
   visibleRooms,
   hasUnsavedChanges = false,
-  onSaveChanges
+  onSaveChanges,
+  onResizeRoutineDuration
 }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<ViewMode>('week');
@@ -101,6 +103,34 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
 
   const viewDates = getDatesForView(currentDate, viewMode);
   const activeRooms = rooms.filter(room => room.isActive).slice(0, visibleRooms);
+
+  // Highlight conflicts only where two routines overlap at this exact 15-min slot in this room
+  const slotHasDancerConflict = (hh: number, mm: number, date: Date, roomId: string): boolean => {
+    const dateStr = date.toISOString().split('T')[0];
+    const slotMinute = hh * 60 + mm;
+    // Routine in this room covering this slot
+    const routineHere = scheduledRoutines.find(sr => {
+      if (sr.roomId !== roomId) return false;
+      if (sr.date !== dateStr) return false;
+      const start = sr.startTime.hour * 60 + sr.startTime.minute;
+      const end = start + sr.duration; // exclusive
+      return slotMinute >= start && slotMinute < end;
+    });
+    if (!routineHere) return false;
+    const dancersHere = new Set((routineHere.routine?.dancers || []).map(d => d.id));
+    // Any other routine (any room) that also covers this slot and shares a dancer?
+    for (const other of scheduledRoutines) {
+      if (other.id === routineHere.id) continue;
+      if (other.date !== dateStr) continue;
+      const oStart = other.startTime.hour * 60 + other.startTime.minute;
+      const oEnd = oStart + other.duration;
+      if (slotMinute >= oStart && slotMinute < oEnd) {
+        const overlap = (other.routine?.dancers || []).some(d => dancersHere.has(d.id));
+        if (overlap) return true;
+      }
+    }
+    return false;
+  };
 
   const navigateDate = (direction: 'prev' | 'next') => {
     const newDate = new Date(currentDate);
@@ -435,10 +465,121 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                   {activeRooms.map(room => (
                     <div key={room.id} className="border-r border-gray-200 last:border-r-0 flex-shrink-0 bg-white" style={{ width: '120px' }}>
                       {timeSlots.map(({ hour, minute }, timeIndex) => {
-                        const routine = getRoutineForSlot(hour, minute, date, room.id);
-                        const hasConflict = hasConflicts(hour, minute, date, room.id);
                         const dateStr = date.toISOString().split('T')[0]; // YYYY-MM-DD format
-                        
+                        // Render sub-slots at 15-min granularity for better drop precision
+                        if (timeInterval === 60) {
+                          const subMinutes = [0, 15, 30, 45];
+                          // Find any routine starting within this hour block
+                          let foundRoutine: ScheduledRoutine | null = null;
+                          let foundOffsetMin = 0;
+                          let foundIndex = 0;
+                          for (const m of subMinutes) {
+                            const mm = minute + m;
+                            const hh = hour + Math.floor(mm / 60);
+                            const mmAdj = mm % 60;
+                            const r = getRoutineForSlot(hh, mmAdj, date, room.id);
+                            if (r) {
+                              foundRoutine = r;
+                              foundOffsetMin = m;
+                              foundIndex = subMinutes.indexOf(m);
+                              break;
+                            }
+                          }
+                          return (
+                            <React.Fragment key={timeIndex}>
+                              {subMinutes.map((m, idx) => {
+                                const mm = minute + m;
+                                const hh = hour + Math.floor(mm / 60);
+                                const mmAdj = mm % 60;
+                                const hasConflict = slotHasDancerConflict(hh, mmAdj, date, room.id);
+                                const hasConflictBlock = findConflicts(scheduledRoutines, { ...foundRoutine, startTime: { hour: hh, minute: mmAdj, day: date.getDay() } } as any, rooms).length > 0;
+                                return (
+                                  <TimeSlot
+                                    key={`${timeIndex}-${idx}`}
+                                    hour={hh}
+                                    minute={mmAdj}
+                                    day={date.getDay()}
+                                    roomId={room.id}
+                                    onDrop={(routine, timeSlot) => onDrop(routine, { ...timeSlot, date: dateStr })}
+                                    onMoveRoutine={(routine, timeSlot) => onMoveRoutine(routine, { ...timeSlot, date: dateStr })}
+                                    hasConflict={hasConflict}
+                                    heightPx={16}
+                                  >
+                                    {foundRoutine && idx === foundIndex && (
+                                      <ScheduledBlock
+                                        routine={foundRoutine}
+                                        onClick={() => onRoutineClick(foundRoutine!)}
+                                        onDelete={onDeleteRoutine}
+                                        timeInterval={timeInterval}
+                                        onResizeDuration={onResizeRoutineDuration}
+                                        offsetTopPx={2}
+                                        hasConflict={hasConflictBlock}
+                                      />
+                                    )}
+                                  </TimeSlot>
+                                );
+                              })}
+                            </React.Fragment>
+                          );
+                        }
+                        if (timeInterval === 30) {
+                          const subMinutes = [0, 15];
+                          let foundRoutine: ScheduledRoutine | null = null;
+                          let foundOffsetMin = 0;
+                          let foundIndex = 0;
+                          for (const m of subMinutes) {
+                            const mm = minute + m;
+                            const hh = hour + Math.floor(mm / 60);
+                            const mmAdj = mm % 60;
+                            const r = getRoutineForSlot(hh, mmAdj, date, room.id);
+                            if (r) {
+                              foundRoutine = r;
+                              foundOffsetMin = m;
+                              foundIndex = subMinutes.indexOf(m);
+                              break;
+                            }
+                          }
+                          return (
+                            <React.Fragment key={timeIndex}>
+                              {subMinutes.map((m, idx) => {
+                                const mm = minute + m;
+                                const hh = hour + Math.floor(mm / 60);
+                                const mmAdj = mm % 60;
+                                const hasConflict = slotHasDancerConflict(hh, mmAdj, date, room.id);
+                                const hasConflictBlock = findConflicts(scheduledRoutines, { ...foundRoutine, startTime: { hour: hh, minute: mmAdj, day: date.getDay() } } as any, rooms).length > 0;
+                                return (
+                                  <TimeSlot
+                                    key={`${timeIndex}-${idx}`}
+                                    hour={hh}
+                                    minute={mmAdj}
+                                    day={date.getDay()}
+                                    roomId={room.id}
+                                    onDrop={(routine, timeSlot) => onDrop(routine, { ...timeSlot, date: dateStr })}
+                                    onMoveRoutine={(routine, timeSlot) => onMoveRoutine(routine, { ...timeSlot, date: dateStr })}
+                                    hasConflict={hasConflict}
+                                    heightPx={32}
+                                  >
+                                    {foundRoutine && idx === foundIndex && (
+                                      <ScheduledBlock
+                                        routine={foundRoutine}
+                                        onClick={() => onRoutineClick(foundRoutine!)}
+                                        onDelete={onDeleteRoutine}
+                                        timeInterval={timeInterval}
+                                        onResizeDuration={onResizeRoutineDuration}
+                                        offsetTopPx={2}
+                                        hasConflict={hasConflictBlock}
+                                      />
+                                    )}
+                                  </TimeSlot>
+                                );
+                              })}
+                            </React.Fragment>
+                          );
+                        }
+                        // 15-min interval
+                        const routine = getRoutineForSlot(hour, minute, date, room.id);
+                        const hasConflict = slotHasDancerConflict(hour, minute, date, room.id);
+                        const hasConflictBlock = routine ? findConflicts(scheduledRoutines, routine, rooms).length > 0 : false;
                         return (
                           <TimeSlot
                             key={timeIndex}
@@ -449,15 +590,18 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                             onDrop={(routine, timeSlot) => onDrop(routine, { ...timeSlot, date: dateStr })}
                             onMoveRoutine={(routine, timeSlot) => onMoveRoutine(routine, { ...timeSlot, date: dateStr })}
                             hasConflict={hasConflict}
+                            heightPx={64}
                           >
-                                {routine && (
-                                  <ScheduledBlock
-                                    routine={routine}
-                                    onClick={() => onRoutineClick(routine)}
-                                    onDelete={onDeleteRoutine}
-                                    timeInterval={timeInterval}
-                                  />
-                                )}
+                            {routine && (
+                              <ScheduledBlock
+                                routine={routine}
+                                onClick={() => onRoutineClick(routine)}
+                                onDelete={onDeleteRoutine}
+                                timeInterval={timeInterval}
+                                onResizeDuration={onResizeRoutineDuration}
+                                hasConflict={hasConflictBlock}
+                              />
+                            )}
                           </TimeSlot>
                         );
                       })}

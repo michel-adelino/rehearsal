@@ -6,11 +6,15 @@ export const findConflicts = (
   newRoutine: ScheduledRoutine,
   rooms: Room[]
 ): Conflict[] => {
+  // Defensive checks for incomplete data
+  if (!newRoutine || !newRoutine.startTime || !newRoutine.endTime || !newRoutine.routine) {
+    return [];
+  }
   // Map to store conflicts grouped by dancer
   const conflictsByDancer = new Map<string, Conflict>();
   
   // Get all dancers in the new routine
-  const newRoutineDancers = newRoutine.routine.dancers;
+  const newRoutineDancers = Array.isArray(newRoutine.routine.dancers) ? newRoutine.routine.dancers : [];
   
   // Check against all existing scheduled routines
   for (const existingRoutine of scheduledRoutines) {
@@ -20,6 +24,10 @@ export const findConflicts = (
     // First check if they're on the same actual date
     if (existingRoutine.date !== newRoutine.date) continue;
     
+    // Ensure existing routine has needed fields
+    if (!existingRoutine.startTime || !existingRoutine.endTime || !existingRoutine.routine) continue;
+    const existingDancers = Array.isArray(existingRoutine.routine.dancers) ? existingRoutine.routine.dancers : [];
+    
     // Check if time slots overlap
     if (isTimeSlotOverlapping(
       newRoutine.startTime,
@@ -28,13 +36,11 @@ export const findConflicts = (
       existingRoutine.endTime
     )) {
       // Find studio name for the existing routine
-      const existingStudio = rooms?.find(room => room.id === existingRoutine.roomId);
+      const existingStudio = Array.isArray(rooms) ? rooms.find(room => room.id === existingRoutine.roomId) : undefined;
       
       // Check for all conflicting dancers (not just the first one)
       const conflictingDancers = newRoutineDancers.filter(newDancer =>
-        existingRoutine.routine.dancers.some(existingDancer =>
-          existingDancer.id === newDancer.id
-        )
+        existingDancers.some(existingDancer => existingDancer.id === newDancer.id)
       );
       
       // For each conflicting dancer, add/update their conflict entry

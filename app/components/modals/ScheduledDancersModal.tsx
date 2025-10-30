@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { ScheduledRoutine } from '../../types/schedule';
 import { X, Users, Calendar, Clock, Music } from 'lucide-react';
 import { formatTime } from '../../utils/timeUtils';
@@ -9,17 +9,26 @@ interface ScheduledDancersModalProps {
   scheduledRoutine: ScheduledRoutine | null;
   isOpen: boolean;
   onClose: () => void;
+  onUpdateDuration?: (id: string, minutes: number) => void;
 }
 
 export const ScheduledDancersModal: React.FC<ScheduledDancersModalProps> = ({
   scheduledRoutine,
   isOpen,
-  onClose
+  onClose,
+  onUpdateDuration,
 }) => {
   if (!isOpen || !scheduledRoutine) return null;
 
   const routine = scheduledRoutine.routine;
   const dancers = routine.dancers;
+
+  // Local editable duration state (prefilled from scheduled routine duration)
+  const [localDuration, setLocalDuration] = useState<number>(scheduledRoutine.duration);
+  // Keep localDuration in sync if a different routine is opened
+  React.useEffect(() => {
+    if (scheduledRoutine) setLocalDuration(scheduledRoutine.duration);
+  }, [scheduledRoutine]);
 
   const formatBirthday = (birthday?: string) => {
     if (!birthday) return '-';
@@ -74,6 +83,46 @@ export const ScheduledDancersModal: React.FC<ScheduledDancersModalProps> = ({
 
         {/* Content */}
         <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
+          {/* Duration Editor */}
+          <div className="mb-6 pb-4 border-b border-gray-200">
+            <div className="flex items-end justify-between gap-4">
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Rehearsal duration (minutes)</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={1}
+                    value={localDuration}
+                    onChange={(e) => setLocalDuration(Math.max(1, Number(e.target.value || 0)))}
+                    className="w-32 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      className="px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100"
+                      onClick={() => setLocalDuration((d) => Math.max(1, d - 15))}
+                    >-15</button>
+                    <button
+                      type="button"
+                      className="px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100"
+                      onClick={() => setLocalDuration((d) => d + 15)}
+                    >+15</button>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <button
+                  type="button"
+                  onClick={() => onUpdateDuration && onUpdateDuration(scheduledRoutine.id, localDuration)}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                  disabled={!onUpdateDuration || localDuration < 1}
+                >
+                  Apply
+                </button>
+              </div>
+            </div>
+          </div>
+
           {/* Routine Info */}
           <div className="mb-6 pb-4 border-b border-gray-200">
             <div className="grid grid-cols-2 gap-4 text-sm">

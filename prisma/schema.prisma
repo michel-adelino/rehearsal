@@ -73,5 +73,5 @@ model ScheduledRoutine {
   room         Room     @relation(fields: [roomId], references: [id])
   routine      Routine  @relation(fields: [routineId], references: [id])
 
-  @@index([date, roomId, startMinutes])
+  @@unique([date, roomId, startMinutes])
 }
