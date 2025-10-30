@@ -73,15 +73,6 @@ export const RoutineCard: React.FC<RoutineCardProps> = ({ routine, onClick, isMa
                 {scheduledHours.toFixed(1)}h scheduled
               </span>
             )}
-            {scheduledCount > 0 && (
-              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                isMaxed 
-                  ? 'bg-gray-300 text-gray-600' 
-                  : 'bg-green-100 text-green-800'
-              }`}>
-                {scheduledCount}/6 scheduled
-              </span>
-            )}
           </div>
         </div>
         

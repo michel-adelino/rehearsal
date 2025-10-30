@@ -1,10 +1,12 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Routine } from '../../types/routine';
 import { ScheduledRoutine } from '../../types/schedule';
 import { RoutineCard } from './RoutineCard';
 import { Search, Plus, Filter } from 'lucide-react';
+import { ManageTeachersModal } from '../modals/ManageTeachersModal';
+import { ManageGenresModal } from '../modals/ManageGenresModal';
 
 interface RoutinesSidebarProps {
   routines: Routine[];
@@ -22,6 +24,28 @@ export const RoutinesSidebar: React.FC<RoutinesSidebarProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedGenre, setSelectedGenre] = useState<string>('all');
   const [selectedTeacher, setSelectedTeacher] = useState<string>('all');
+  const [openTeachers, setOpenTeachers] = useState(false);
+  const [openGenres, setOpenGenres] = useState(false);
+  const [teachers, setTeachers] = useState<{ id: string; name: string; email?: string | null }[]>([]);
+  const [genres, setGenres] = useState<{ id: string; name: string; color: string }[]>([]);
+
+  useEffect(() => {
+    // Load initial teachers/genres to populate the management modals
+    const load = async () => {
+      try {
+        const [tRes, gRes] = await Promise.all([
+          fetch('/api/teachers'),
+          fetch('/api/genres')
+        ]);
+        const [tData, gData] = await Promise.all([tRes.json(), gRes.json()]);
+        setTeachers(tData);
+        setGenres(gData);
+      } catch {
+        // best-effort; modals can still fetch on open
+      }
+    };
+    load();
+  }, []);
 
   // Count how many times each routine is scheduled and calculate total hours
   const routineScheduledCounts = useMemo(() => {
@@ -88,7 +112,7 @@ export const RoutinesSidebar: React.FC<RoutinesSidebarProps> = ({
     <div className="w-80 bg-gray-50 border-r border-gray-200 flex flex-col h-screen">
       {/* Header */}
       <div className="p-4 border-b border-gray-200">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-2">
           <h2 className="text-lg font-semibold text-gray-900">Routines</h2>
           <button
             onClick={onAddRoutine}
@@ -96,6 +120,22 @@ export const RoutinesSidebar: React.FC<RoutinesSidebarProps> = ({
           >
             <Plus className="w-4 h-4" />
             Add Routine
+          </button>
+        </div>
+        <div className="flex items-center gap-2 mb-4">
+          <button
+            onClick={() => setOpenTeachers(true)}
+            className="px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50"
+            title="Manage Teachers"
+          >
+            Manage Teachers
+          </button>
+          <button
+            onClick={() => setOpenGenres(true)}
+            className="px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50"
+            title="Manage Genres"
+          >
+            Manage Genres
           </button>
         </div>
         {/* Search Bar */}
@@ -178,6 +218,20 @@ export const RoutinesSidebar: React.FC<RoutinesSidebarProps> = ({
           )}
         </div>
       </div>
+
+      {/* Management Modals */}
+      <ManageTeachersModal
+        isOpen={openTeachers}
+        teachers={teachers}
+        onClose={() => setOpenTeachers(false)}
+        onChange={setTeachers}
+      />
+      <ManageGenresModal
+        isOpen={openGenres}
+        genres={genres}
+        onClose={() => setOpenGenres(false)}
+        onChange={setGenres}
+      />
     </div>
   );
 };

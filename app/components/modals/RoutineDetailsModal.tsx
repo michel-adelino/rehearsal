@@ -2,9 +2,12 @@
 
 import React, { useState } from 'react';
 import { Routine, Teacher, Genre } from '../../types/routine';
+import { Loader2 } from 'lucide-react';
 import { Dancer } from '../../types/dancer';
 import { X, Save, Trash2, Users, Clock, User, Tag, Plus } from 'lucide-react';
 import { DancerSelectionModal } from './DancerSelectionModal';
+import { ManageTeachersModal } from './ManageTeachersModal';
+import { ManageGenresModal } from './ManageGenresModal';
 
 interface RoutineDetailsModalProps {
   routine: Routine | null;
@@ -15,6 +18,7 @@ interface RoutineDetailsModalProps {
   onClose: () => void;
   onSave: (routine: Routine) => void;
   onDelete: (routineId: string) => void;
+  saving?: boolean;
 }
 
 export const RoutineDetailsModal: React.FC<RoutineDetailsModalProps> = ({
@@ -25,13 +29,18 @@ export const RoutineDetailsModal: React.FC<RoutineDetailsModalProps> = ({
   isOpen,
   onClose,
   onSave,
-  onDelete
+  onDelete,
+  saving = false
 }) => {
   const [editedRoutine, setEditedRoutine] = useState<Routine | null>(null);
   const [showDancerSelection, setShowDancerSelection] = useState(false);
   const [showClassesModal, setShowClassesModal] = useState(false);
   const [selectedDancerClasses, setSelectedDancerClasses] = useState<string[]>([]);
   const [selectedDancerName, setSelectedDancerName] = useState<string>('');
+  const [showManageTeachers, setShowManageTeachers] = useState(false);
+  const [showManageGenres, setShowManageGenres] = useState(false);
+  const [localTeachers, setLocalTeachers] = useState<Teacher[]>(teachers);
+  const [localGenres, setLocalGenres] = useState<Genre[]>(genres);
 
   React.useEffect(() => {
     if (routine) {
@@ -39,11 +48,13 @@ export const RoutineDetailsModal: React.FC<RoutineDetailsModalProps> = ({
     }
   }, [routine]);
 
+  React.useEffect(() => setLocalTeachers(teachers), [teachers]);
+  React.useEffect(() => setLocalGenres(genres), [genres]);
+
   if (!isOpen || !editedRoutine) return null;
 
   const handleSave = () => {
     onSave(editedRoutine);
-    onClose();
   };
 
   const handleDelete = () => {
@@ -100,7 +111,7 @@ export const RoutineDetailsModal: React.FC<RoutineDetailsModalProps> = ({
         </div>
 
         {/* Content */}
-        <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
+        <div className="p-6 overflow-y-auto max-h-[calc(90vh-170px)]">
           <div className="space-y-6">
             {/* Song Title */}
             <div>
@@ -113,7 +124,7 @@ export const RoutineDetailsModal: React.FC<RoutineDetailsModalProps> = ({
                 onChange={(e) => setEditedRoutine(prev => 
                   prev ? { ...prev, songTitle: e.target.value } : prev
                 )}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900 placeholder-gray-400"
               />
             </div>
 
@@ -124,24 +135,29 @@ export const RoutineDetailsModal: React.FC<RoutineDetailsModalProps> = ({
                   <User className="w-4 h-4 inline mr-1" />
                   Teacher
                 </label>
+                <div className="flex gap-2">
                 <select
                   value={editedRoutine.teacher.id}
                   onChange={(e) => {
-                    const teacher = teachers.find(t => t.id === e.target.value);
+                    const teacher = localTeachers.find(t => t.id === e.target.value);
                     if (teacher) {
                       setEditedRoutine(prev => 
                         prev ? { ...prev, teacher } : prev
                       );
                     }
                   }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-gray-900"
                 >
-                  {teachers.map(teacher => (
+                  {localTeachers.map(teacher => (
                     <option key={teacher.id} value={teacher.id}>
                       {teacher.name}
                     </option>
                   ))}
                 </select>
+                <button type="button" className="px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50" onClick={() => setShowManageTeachers(true)}>
+                  Manage
+                </button>
+                </div>
               </div>
 
               <div>
@@ -149,24 +165,29 @@ export const RoutineDetailsModal: React.FC<RoutineDetailsModalProps> = ({
                   <Tag className="w-4 h-4 inline mr-1" />
                   Genre
                 </label>
+                <div className="flex gap-2">
                 <select
                   value={editedRoutine.genre.id}
                   onChange={(e) => {
-                    const genre = genres.find(g => g.id === e.target.value);
+                    const genre = localGenres.find(g => g.id === e.target.value);
                     if (genre) {
                       setEditedRoutine(prev => 
                         prev ? { ...prev, genre, color: genre.color } : prev
                       );
                     }
                   }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-gray-900"
                 >
-                  {genres.map(genre => (
+                  {localGenres.map(genre => (
                     <option key={genre.id} value={genre.id}>
                       {genre.name}
                     </option>
                   ))}
                 </select>
+                <button type="button" className="px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50" onClick={() => setShowManageGenres(true)}>
+                  Manage
+                </button>
+                </div>
               </div>
             </div>
 
@@ -183,7 +204,7 @@ export const RoutineDetailsModal: React.FC<RoutineDetailsModalProps> = ({
                   onChange={(e) => setEditedRoutine(prev => 
                     prev ? { ...prev, duration: parseInt(e.target.value) || 0 } : prev
                   )}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-gray-900 placeholder-gray-400"
                   min="15"
                   max="240"
                   step="15"
@@ -199,7 +220,7 @@ export const RoutineDetailsModal: React.FC<RoutineDetailsModalProps> = ({
                   onChange={(e) => setEditedRoutine(prev => 
                     prev ? { ...prev, level: e.target.value || undefined } : prev
                   )}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-gray-900"
                 >
                   <option value="">Select Level</option>
                   <option value="Beginner">Beginner</option>
@@ -353,7 +374,7 @@ export const RoutineDetailsModal: React.FC<RoutineDetailsModalProps> = ({
                   prev ? { ...prev, notes: e.target.value } : prev
                 )}
                 rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900 placeholder-gray-400"
                 placeholder="Add any notes about this routine..."
               />
             </div>
@@ -364,26 +385,33 @@ export const RoutineDetailsModal: React.FC<RoutineDetailsModalProps> = ({
         <div className="flex items-center justify-between p-6 border-t border-gray-200 bg-gray-50">
           <button
             onClick={handleDelete}
-            className="flex items-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+            disabled={saving}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${saving ? 'opacity-60 cursor-not-allowed text-red-300' : 'text-red-600 hover:bg-red-50'}`}
           >
             <Trash2 className="w-4 h-4" />
             Delete
           </button>
           
           <div className="flex items-center gap-3">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-            >
+          <button
+            onClick={onClose}
+            disabled={saving}
+            className={`px-4 py-2 rounded-lg transition-colors ${saving ? 'opacity-60 cursor-not-allowed bg-gray-100 text-gray-400' : 'text-gray-600 hover:bg-gray-100'}`}
+          >
               Cancel
             </button>
-            <button
-              onClick={handleSave}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${saving ? 'bg-blue-400 cursor-wait' : 'bg-blue-600 hover:bg-blue-700'} text-white`}
+          >
+            {saving ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
               <Save className="w-4 h-4" />
-              Save Changes
-            </button>
+            )}
+            {saving ? 'Saving...' : 'Save Changes'}
+          </button>
           </div>
         </div>
       </div>
@@ -395,6 +423,35 @@ export const RoutineDetailsModal: React.FC<RoutineDetailsModalProps> = ({
         isOpen={showDancerSelection}
         onClose={() => setShowDancerSelection(false)}
         onApply={handleDancerSelection}
+      />
+
+      {/* Manage Teachers */}
+      <ManageTeachersModal
+        isOpen={showManageTeachers}
+        teachers={localTeachers}
+        onClose={() => setShowManageTeachers(false)}
+        onChange={(next) => {
+          setLocalTeachers(next as unknown as Teacher[]);
+          // If current selection was deleted, align to first item
+          if (!next.find(t => t.id === editedRoutine.teacher.id) && next.length > 0) {
+            const newTeacher = next[0] as unknown as Teacher;
+            setEditedRoutine(prev => (prev ? { ...prev, teacher: newTeacher } : prev));
+          }
+        }}
+      />
+
+      {/* Manage Genres */}
+      <ManageGenresModal
+        isOpen={showManageGenres}
+        genres={localGenres}
+        onClose={() => setShowManageGenres(false)}
+        onChange={(next) => {
+          setLocalGenres(next as unknown as Genre[]);
+          if (!next.find(g => g.id === editedRoutine.genre.id) && next.length > 0) {
+            const newGenre = next[0] as unknown as Genre;
+            setEditedRoutine(prev => (prev ? { ...prev, genre: newGenre, color: newGenre.color } : prev));
+          }
+        }}
       />
 
       {/* Classes Modal */}

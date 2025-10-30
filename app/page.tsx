@@ -18,6 +18,8 @@ import { ScheduledDancersModal } from './components/modals/ScheduledDancersModal
 import { CsvImportModal } from './components/modals/CsvImportModal';
 import { DancerEditModal } from './components/modals/DancerEditModal';
 import { DancerAddModal } from './components/modals/DancerAddModal';
+import { ExportScheduleModal } from './components/modals/ExportScheduleModal';
+import { LoadingOverlay } from './components/common/LoadingOverlay';
 
 // Types
 import { Routine } from './types/routine';
@@ -46,6 +48,8 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(true);
   const [savedScheduledRoutines, setSavedScheduledRoutines] = useState<ScheduledRoutine[]>([]);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [isSavingRoutine, setIsSavingRoutine] = useState(false);
+  const [isSavingSchedule, setIsSavingSchedule] = useState(false);
   
   // Modal states
   const [selectedRoutine, setSelectedRoutine] = useState<Routine | null>(null);
@@ -54,6 +58,7 @@ export default function Home() {
   const [selectedScheduledRoutine, setSelectedScheduledRoutine] = useState<ScheduledRoutine | null>(null);
   const [showScheduledDancersModal, setShowScheduledDancersModal] = useState(false);
   const [showCsvImportModal, setShowCsvImportModal] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
   const [selectedDancer, setSelectedDancer] = useState<Dancer | null>(null);
   const [showDancerEditModal, setShowDancerEditModal] = useState(false);
   const [showDancerAddModal, setShowDancerAddModal] = useState(false);
@@ -205,6 +210,7 @@ export default function Home() {
   }, []);
 
   const handleSaveRoutine = useCallback(async (updatedRoutine: Routine) => {
+    setIsSavingRoutine(true);
     try {
       // Extract dancer IDs
       const dancerIds = updatedRoutine.dancers?.map(d => d.id) || [];
@@ -270,6 +276,8 @@ export default function Home() {
       console.error('Failed to save routine:', e);
       const errorMessage = e instanceof Error ? e.message : 'Failed to save routine';
       toast.error(errorMessage);
+    } finally {
+      setIsSavingRoutine(false);
     }
   }, [routines]);
 
@@ -477,6 +485,7 @@ export default function Home() {
 
   // Save all schedule changes to database
   const handleSaveScheduleChanges = useCallback(async () => {
+    setIsSavingSchedule(true);
     try {
       // Find new routines (not in saved state)
       const newRoutines = scheduledRoutines.filter(curr => 
@@ -627,6 +636,8 @@ export default function Home() {
       console.error('Failed to save schedule changes:', e);
       const errorMessage = e instanceof Error ? e.message : 'Failed to save schedule changes';
       toast.error(errorMessage);
+    } finally {
+      setIsSavingSchedule(false);
     }
   }, [scheduledRoutines, savedScheduledRoutines]);
   
@@ -659,24 +670,27 @@ export default function Home() {
   }, []);
 
   const handleExportSchedule = useCallback(() => {
-    // Generate week dates for the current week
-    const currentWeek = new Date();
-    const start = new Date(currentWeek);
-    const day = start.getDay();
-    const diff = start.getDate() - day;
-    start.setDate(diff);
-    
-    const weekDates: Date[] = [];
-    for (let i = 0; i < 7; i++) {
-      const day = new Date(start);
-      day.setDate(start.getDate() + i);
-      weekDates.push(day);
+    setShowExportModal(true);
+  }, []);
+
+  const handleConfirmExport = useCallback((from: string, to: string) => {
+    // Build inclusive date range array
+    const fromDate = new Date(from);
+    const toDate = new Date(to);
+    const dates: Date[] = [];
+    const cursor = new Date(fromDate);
+    while (cursor <= toDate) {
+      dates.push(new Date(cursor));
+      cursor.setDate(cursor.getDate() + 1);
     }
     
-    // Import and use the PDF generation utility
+    // Filter scheduled routines by date range (based on sr.date which is YYYY-MM-DD)
+    const filtered = scheduledRoutines.filter(sr => sr.date >= from && sr.date <= to);
+
     import('./utils/pdfUtils').then(({ generateSchedulePDF }) => {
-      generateSchedulePDF(scheduledRoutines, weekDates);
+      generateSchedulePDF(filtered, dates);
     });
+    setShowExportModal(false);
   }, [scheduledRoutines]);
 
   const handleImportDancers = useCallback(async (importedDancers: Dancer[]) => {
@@ -817,6 +831,9 @@ export default function Home() {
   return (
     <DndProvider backend={HTML5Backend}>
       <div className="h-screen bg-gray-100 flex overflow-hidden">
+        {(isSavingRoutine || isSavingSchedule) && (
+          <LoadingOverlay message={isSavingRoutine ? 'Saving routine...' : 'Saving schedule...'} />
+        )}
         {/* Left Sidebar - Routines */}
         <div className="flex-shrink-0">
           <RoutinesSidebar
@@ -876,6 +893,7 @@ export default function Home() {
           teachers={mockTeachers}
           genres={mockGenres}
           isOpen={showRoutineModal}
+          saving={isSavingRoutine}
           onClose={() => {
             setShowRoutineModal(false);
             setSelectedRoutine(null);
@@ -896,6 +914,12 @@ export default function Home() {
           scheduledRoutines={scheduledRoutines}
           isOpen={showEmailModal}
           onClose={() => setShowEmailModal(false)}
+        />
+
+        <ExportScheduleModal
+          isOpen={showExportModal}
+          onClose={() => setShowExportModal(false)}
+          onExport={handleConfirmExport}
         />
 
         <ScheduledDancersModal

@@ -21,7 +21,7 @@ export const ConflictWarningModal: React.FC<ConflictWarningModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-md max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center gap-3 p-6 border-b border-gray-200">
           <div className="p-2 bg-red-100 rounded-full">
@@ -40,7 +40,7 @@ export const ConflictWarningModal: React.FC<ConflictWarningModalProps> = ({
         </div>
 
         {/* Content */}
-        <div className="p-6">
+        <div className="p-6 overflow-y-auto flex-1">
           <div className="space-y-4">
             {conflicts.map((conflict, index) => (
               <div key={index} className="bg-red-50 border border-red-200 rounded-lg p-4">

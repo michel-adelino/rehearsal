@@ -54,9 +54,6 @@ export const RoomRow: React.FC<RoomRowProps> = ({
       <div className="w-32 bg-gray-50 border-r border-gray-200 p-3 flex items-center justify-center">
         <div className="text-center">
           <div className="font-medium text-gray-900 text-sm">{room.name}</div>
-          {room.capacity && (
-            <div className="text-xs text-gray-500">Max {room.capacity}</div>
-          )}
         </div>
       </div>
       

@@ -360,9 +360,6 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                       {activeRooms.map(room => (
                         <div key={room.id} className="border-r border-gray-200 last:border-r-0 p-3 text-center" style={{ width: '120px' }}>
                           <div className="text-sm font-medium text-gray-700">{room.name}</div>
-                          {room.capacity && (
-                            <div className="text-xs text-gray-500">({room.capacity})</div>
-                          )}
                         </div>
                       ))}
                     </div>
