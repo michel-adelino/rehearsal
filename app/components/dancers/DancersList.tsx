@@ -13,6 +13,7 @@ interface DancersListProps {
   onClose?: () => void;
   onEditDancer?: (dancer: Dancer) => void;
   onDeleteDancer?: (dancerId: string) => void;
+  onBatchDeleteDancers?: (dancerIds: string[]) => void;
   onAddDancer?: () => void;
   onImportCsv?: () => void;
 }
@@ -24,6 +25,7 @@ export const DancersList: React.FC<DancersListProps> = ({
   onClose,
   onEditDancer,
   onDeleteDancer,
+  onBatchDeleteDancers,
   onAddDancer,
   onImportCsv
 }) => {
@@ -35,6 +37,15 @@ export const DancersList: React.FC<DancersListProps> = ({
   const [showClassesModal, setShowClassesModal] = useState(false);
   const [selectedDancerClasses, setSelectedDancerClasses] = useState<string[]>([]);
   const [selectedDancerName, setSelectedDancerName] = useState<string>('');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  const toggleSelectOne = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
 
   const toggleExpand = (dancerId: string) => {
     setExpandedDancers(prev => {
@@ -112,6 +123,22 @@ export const DancersList: React.FC<DancersListProps> = ({
     });
   }, [dancers, searchTerm, filterLevel, filterGenre, filterGender]);
 
+  const allVisibleSelected = useMemo(() =>
+    filteredDancers.length > 0 && filteredDancers.every(d => selectedIds.has(d.id))
+  , [filteredDancers, selectedIds]);
+
+  const toggleSelectAllVisible = () => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (allVisibleSelected) {
+        filteredDancers.forEach(d => next.delete(d.id));
+      } else {
+        filteredDancers.forEach(d => next.add(d.id));
+      }
+      return next;
+    });
+  };
+
   return (
     <div className="flex-1 bg-white flex flex-col" style={{ height: '100%' }}>
       {/* Header */}
@@ -122,6 +149,22 @@ export const DancersList: React.FC<DancersListProps> = ({
             <h1 className="text-2xl font-semibold text-gray-900">Dancers</h1>
           </div>
           <div className="flex items-center gap-2">
+            {onBatchDeleteDancers && selectedIds.size > 0 && (
+              <button
+                onClick={() => {
+                  const ids = Array.from(selectedIds);
+                  const count = ids.length;
+                  const confirmed = window.confirm(`Delete ${count} selected dancer${count > 1 ? 's' : ''}? This cannot be undone.`);
+                  if (!confirmed) return;
+                  onBatchDeleteDancers(ids);
+                  setSelectedIds(new Set());
+                }}
+                className="flex items-center gap-2 px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete Selected ({selectedIds.size})
+              </button>
+            )}
             {onAddDancer && (
               <button
                 onClick={onAddDancer}
@@ -222,6 +265,15 @@ export const DancersList: React.FC<DancersListProps> = ({
           <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50 sticky top-0 z-10">
             <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-12">
+                {onBatchDeleteDancers && (
+                  <input
+                    type="checkbox"
+                    checked={allVisibleSelected}
+                    onChange={toggleSelectAllVisible}
+                  />
+                )}
+              </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-12"></th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
@@ -245,6 +297,15 @@ export const DancersList: React.FC<DancersListProps> = ({
               return (
                 <React.Fragment key={dancer.id}>
                   <tr className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {onBatchDeleteDancers && (
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(dancer.id)}
+                          onChange={() => toggleSelectOne(dancer.id)}
+                        />
+                      )}
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <button
                         onClick={() => toggleExpand(dancer.id)}

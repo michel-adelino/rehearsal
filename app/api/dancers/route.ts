@@ -66,20 +66,43 @@ export async function POST(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
+    const idsParam = searchParams.get('ids');
     const id = searchParams.get('id');
 
-    if (!id) {
+    if (!id && !idsParam) {
       return NextResponse.json(
-        { error: 'Dancer ID is required' },
+        { error: 'Dancer ID(s) are required' },
         { status: 400 }
       );
     }
 
+    // Batch delete when ids (comma-separated) are provided
+    if (idsParam) {
+      const ids = idsParam
+        .split(',')
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
+
+      if (ids.length === 0) {
+        return NextResponse.json(
+          { error: 'No valid IDs provided' },
+          { status: 400 }
+        );
+      }
+
+      const result = await prisma.dancer.deleteMany({
+        where: { id: { in: ids } },
+      });
+
+      return NextResponse.json({ success: true, count: result.count }, { status: 200 });
+    }
+
+    // Single delete fallback
     await prisma.dancer.delete({
-      where: { id },
+      where: { id: id as string },
     });
 
-    return NextResponse.json({ success: true }, { status: 200 });
+    return NextResponse.json({ success: true, count: 1 }, { status: 200 });
   } catch (error: unknown) {
     console.error('Error deleting dancer:', error);
     const errorMessage = error instanceof Error ? error.message : 'Failed to delete dancer';

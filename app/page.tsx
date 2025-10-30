@@ -871,6 +871,48 @@ export default function Home() {
     }
   }, [dancers]);
 
+  const handleBatchDeleteDancers = useCallback(async (dancerIds: string[]) => {
+    if (!Array.isArray(dancerIds) || dancerIds.length === 0) return;
+    try {
+      const idsParam = encodeURIComponent(dancerIds.join(','));
+      const res = await fetch(`/api/dancers?ids=${idsParam}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) throw new Error('Failed to delete selected dancers');
+
+      const deletedNames = dancers
+        .filter(d => dancerIds.includes(d.id))
+        .map(d => d.name);
+
+      // Remove dancers from state
+      setDancers(prev => prev.filter(d => !dancerIds.includes(d.id)));
+
+      // Remove dancers from routines
+      setRoutines(prev => prev.map(routine => ({
+        ...routine,
+        dancers: routine.dancers.filter(d => !dancerIds.includes(d.id))
+      })));
+
+      // Update scheduled routines that reference these dancers
+      setScheduledRoutines(prev => prev.map(sr => {
+        const hasAny = sr.routine.dancers.some(d => dancerIds.includes(d.id));
+        if (!hasAny) return sr;
+        return {
+          ...sr,
+          routine: {
+            ...sr.routine,
+            dancers: sr.routine.dancers.filter(d => !dancerIds.includes(d.id))
+          }
+        };
+      }));
+
+      toast.success(`Deleted ${dancerIds.length} dancer(s)` + (deletedNames.length ? `: ${deletedNames.join(', ')}` : ''));
+    } catch (e: unknown) {
+      const errorMessage = e instanceof Error ? e.message : 'Failed to delete selected dancers';
+      toast.error(errorMessage);
+    }
+  }, [dancers]);
+
   // Show loading state
   if (isLoading) {
     return (
@@ -909,6 +951,7 @@ export default function Home() {
               onClose={() => setShowDancersList(false)}
               onEditDancer={handleEditDancer}
               onDeleteDancer={handleDeleteDancer}
+              onBatchDeleteDancers={handleBatchDeleteDancers}
               onAddDancer={() => setShowDancerAddModal(true)}
               onImportCsv={() => setShowCsvImportModal(true)}
             />
