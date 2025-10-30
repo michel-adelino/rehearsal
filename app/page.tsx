@@ -35,7 +35,7 @@ import { useConflictDetection } from './hooks/useConflictDetection';
 
 // Utils
 import { addMinutesToTime, formatTime } from './utils/timeUtils';
-import { findConflicts, checkRoomConflict } from './utils/conflictUtils';
+import { findConflicts, getRoomOverlaps } from './utils/conflictUtils';
 
 export default function Home() {
   // State
@@ -321,12 +321,13 @@ export default function Home() {
       return;
     }
 
-    // Check if the room/studio already has a routine at this time
-    const roomConflict = checkRoomConflict(scheduledRoutines, newScheduledRoutine);
-    if (roomConflict) {
+    // Strict room overlap detection (all overlaps)
+    const roomOverlaps = getRoomOverlaps(scheduledRoutines, newScheduledRoutine);
+    if (roomOverlaps.length > 0) {
       const roomName = rooms.find(r => r.id === timeSlot.roomId)?.name || 'Studio';
-      const conflictTime = formatTime(roomConflict.startTime.hour, roomConflict.startTime.minute);
-      toast.error(`${roomName} already has "${roomConflict.routine.songTitle}" scheduled at ${conflictTime}. Only one routine can be scheduled per studio at a time.`);
+      const first = roomOverlaps[0];
+      const conflictTime = formatTime(first.startTime.hour, first.startTime.minute);
+      toast.error(`${roomName} already has "${first.routine.songTitle}" scheduled at ${conflictTime}. Only one routine can be scheduled per studio at a time.`);
       console.log('Room conflict detected - cannot schedule routine');
       return;
     }
@@ -404,12 +405,13 @@ export default function Home() {
       return;
     }
 
-    // Check if the room/studio already has a routine at this time (excluding the routine being moved)
-    const roomConflict = checkRoomConflict(otherRoutines, updatedRoutine);
-    if (roomConflict) {
+    // Strict room overlap detection (excluding self)
+    const roomOverlaps = getRoomOverlaps(otherRoutines, updatedRoutine);
+    if (roomOverlaps.length > 0) {
       const roomName = rooms.find(r => r.id === newTimeSlot.roomId)?.name || 'Studio';
-      const conflictTime = formatTime(roomConflict.startTime.hour, roomConflict.startTime.minute);
-      toast.error(`${roomName} already has "${roomConflict.routine.songTitle}" scheduled at ${conflictTime}. Only one routine can be scheduled per studio at a time.`);
+      const first = roomOverlaps[0];
+      const conflictTime = formatTime(first.startTime.hour, first.startTime.minute);
+      toast.error(`${roomName} already has "${first.routine.songTitle}" scheduled at ${conflictTime}. Only one routine can be scheduled per studio at a time.`);
       console.log('Room conflict detected - cannot move routine');
       return;
     }
@@ -465,12 +467,13 @@ export default function Home() {
     // Exclude current from conflict checks
     const others = scheduledRoutines.filter(sr => sr.id !== id);
 
-    // Room conflict check
-    const roomConflict = checkRoomConflict(others, updated);
-    if (roomConflict) {
+    // Room conflict check (all overlaps)
+    const roomOverlaps = getRoomOverlaps(others, updated);
+    if (roomOverlaps.length > 0) {
       const roomName = rooms.find(r => r.id === updated.roomId)?.name || 'Studio';
-      const conflictTime = formatTime(roomConflict.startTime.hour, roomConflict.startTime.minute);
-      toast.error(`${roomName} already has "${roomConflict.routine.songTitle}" scheduled at ${conflictTime}.`);
+      const first = roomOverlaps[0];
+      const conflictTime = formatTime(first.startTime.hour, first.startTime.minute);
+      toast.error(`${roomName} already has "${first.routine.songTitle}" scheduled at ${conflictTime}.`);
       return;
     }
 

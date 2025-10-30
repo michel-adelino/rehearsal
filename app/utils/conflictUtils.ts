@@ -124,3 +124,23 @@ export const checkRoomConflict = (
   
   return null;
 };
+
+/**
+ * Returns ALL routines in the same room/date that overlap with the candidate.
+ * Excludes the candidate by id.
+ */
+export const getRoomOverlaps = (
+  scheduledRoutines: ScheduledRoutine[],
+  candidate: ScheduledRoutine
+): ScheduledRoutine[] => {
+  const overlaps: ScheduledRoutine[] = [];
+  for (const existing of scheduledRoutines) {
+    if (existing.id === candidate.id) continue;
+    if (existing.roomId !== candidate.roomId) continue;
+    if (existing.date !== candidate.date) continue;
+    if (isTimeSlotOverlapping(candidate.startTime, candidate.endTime, existing.startTime, existing.endTime)) {
+      overlaps.push(existing);
+    }
+  }
+  return overlaps;
+};
