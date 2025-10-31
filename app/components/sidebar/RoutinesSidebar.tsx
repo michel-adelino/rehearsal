@@ -1,45 +1,62 @@
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
+import Image from 'next/image';
 import { Routine } from '../../types/routine';
 import { ScheduledRoutine } from '../../types/schedule';
 import { RoutineCard } from './RoutineCard';
-import { Search, Plus, Filter } from 'lucide-react';
+import { Search, Plus, Filter, ArrowUpAZ, ArrowDownAZ } from 'lucide-react';
 import { ManageTeachersModal } from '../modals/ManageTeachersModal';
 import { ManageGenresModal } from '../modals/ManageGenresModal';
+import { ManageLevelsModal } from '../modals/ManageLevelsModal';
 
 interface RoutinesSidebarProps {
   routines: Routine[];
   scheduledRoutines: ScheduledRoutine[];
   onRoutineClick: (routine: Routine) => void;
   onAddRoutine: () => void;
+  onToggleInactive?: (routine: Routine) => void;
+  onTeachersChange?: (teachers: { id: string; name: string; email?: string | null }[]) => void;
+  onGenresChange?: (genres: { id: string; name: string; color: string }[]) => void;
+  onLevelsChange?: (levels: { id: string; name: string }[]) => void;
 }
 
 export const RoutinesSidebar: React.FC<RoutinesSidebarProps> = ({
   routines,
   scheduledRoutines,
   onRoutineClick,
-  onAddRoutine
+  onAddRoutine,
+  onToggleInactive,
+  onTeachersChange,
+  onGenresChange,
+  onLevelsChange
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedGenre, setSelectedGenre] = useState<string>('all');
   const [selectedTeacher, setSelectedTeacher] = useState<string>('all');
+  const [selectedLevel, setSelectedLevel] = useState<string>('all');
   const [openTeachers, setOpenTeachers] = useState(false);
   const [openGenres, setOpenGenres] = useState(false);
+  const [openLevels, setOpenLevels] = useState(false);
+  const [hideInactive, setHideInactive] = useState(false);
+  const [sortOrder, setSortOrder] = useState<'A-Z' | 'Z-A' | 'none'>('A-Z');
   const [teachers, setTeachers] = useState<{ id: string; name: string; email?: string | null }[]>([]);
   const [genres, setGenres] = useState<{ id: string; name: string; color: string }[]>([]);
+  const [levels, setLevels] = useState<{ id: string; name: string }[]>([]);
 
   useEffect(() => {
     // Load initial teachers/genres to populate the management modals
     const load = async () => {
       try {
-        const [tRes, gRes] = await Promise.all([
+        const [tRes, gRes, lRes] = await Promise.all([
           fetch('/api/teachers'),
-          fetch('/api/genres')
+          fetch('/api/genres'),
+          fetch('/api/levels')
         ]);
-        const [tData, gData] = await Promise.all([tRes.json(), gRes.json()]);
+        const [tData, gData, lData] = await Promise.all([tRes.json(), gRes.json(), lRes.json()]);
         setTeachers(tData);
         setGenres(gData);
+        setLevels(lData);
       } catch {
         // best-effort; modals can still fetch on open
       }
@@ -77,29 +94,61 @@ export const RoutinesSidebar: React.FC<RoutinesSidebarProps> = ({
       
       const matchesGenre = selectedGenre === 'all' || routine.genre.name === selectedGenre;
       const matchesTeacher = selectedTeacher === 'all' || routine.teacher.name === selectedTeacher;
+      const matchesLevel = selectedLevel === 'all' || routine.level?.name === selectedLevel;
       
-      return matchesSearch && matchesGenre && matchesTeacher;
+      return matchesSearch && matchesGenre && matchesTeacher && matchesLevel;
     });
 
-    // Sort: routines with 6+ scheduled instances go to the bottom
+    // Separate routines by status:
+    // - Inactive: manually marked as inactive OR 0 scheduled instances
+    // - Active: 1-5 scheduled instances (not manually marked inactive)
+    // - Maxed: 6+ scheduled instances (not manually marked inactive)
     const maxCount = 6;
     const activeRoutines: Routine[] = [];
     const maxedRoutines: Routine[] = [];
+    const inactiveRoutines: Routine[] = [];
 
     filtered.forEach(routine => {
       const count = routineScheduledCounts[routine.id] || 0;
-      if (count >= maxCount) {
+      const isManuallyInactive = routine.isInactive || false;
+      const hasNoSchedule = count === 0;
+      
+      // A routine is inactive if manually marked OR has no scheduled instances
+      const isInactive = isManuallyInactive || hasNoSchedule;
+      
+      if (isInactive) {
+        inactiveRoutines.push(routine);
+      } else if (count >= maxCount) {
         maxedRoutines.push(routine);
       } else {
         activeRoutines.push(routine);
       }
     });
 
-    return [...activeRoutines, ...maxedRoutines];
-  }, [routines, searchTerm, selectedGenre, selectedTeacher, routineScheduledCounts]);
+    // Sort each category alphabetically by songTitle if sorting is enabled
+    if (sortOrder !== 'none') {
+      const sortByTitle = (a: Routine, b: Routine) => {
+        const comparison = a.songTitle.localeCompare(b.songTitle, undefined, { sensitivity: 'base' });
+        return sortOrder === 'A-Z' ? comparison : -comparison;
+      };
+      
+      activeRoutines.sort(sortByTitle);
+      maxedRoutines.sort(sortByTitle);
+      inactiveRoutines.sort(sortByTitle);
+    }
+
+    // If hideInactive is true, filter out inactive routines
+    // Otherwise, show them at the bottom
+    const routinesToShow = hideInactive 
+      ? [...activeRoutines, ...maxedRoutines]
+      : [...activeRoutines, ...maxedRoutines, ...inactiveRoutines];
+
+    return routinesToShow;
+  }, [routines, searchTerm, selectedGenre, selectedTeacher, selectedLevel, routineScheduledCounts, hideInactive, sortOrder]);
 
   const uniqueGenres = Array.from(new Set(routines.map(r => r.genre.name)));
   const uniqueTeachers = Array.from(new Set(routines.map(r => r.teacher.name)));
+  const uniqueLevels = Array.from(new Set(routines.filter(r => r.level).map(r => r.level!.name)));
   
   // Debug logging
   console.log('Available genres:', uniqueGenres);
@@ -112,6 +161,17 @@ export const RoutinesSidebar: React.FC<RoutinesSidebarProps> = ({
     <div className="w-80 bg-gray-50 border-r border-gray-200 flex flex-col h-screen">
       {/* Header */}
       <div className="p-4 border-b border-gray-200">
+        {/* Logo */}
+        <div className="mb-4 flex justify-center">
+          <Image
+            src="/RehearsalHub.webp"
+            alt="RehearsalHub Logo"
+            width={200}
+            height={80}
+            className="object-contain"
+            priority
+          />
+        </div>
         <div className="flex items-center justify-between mb-2">
           <h2 className="text-lg font-semibold text-gray-900">Routines</h2>
           <button
@@ -122,7 +182,7 @@ export const RoutinesSidebar: React.FC<RoutinesSidebarProps> = ({
             Add Routine
           </button>
         </div>
-        <div className="flex items-center gap-2 mb-4">
+        <div className="flex items-center gap-2 mb-4 flex-wrap">
           <button
             onClick={() => setOpenTeachers(true)}
             className="px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50"
@@ -136,6 +196,13 @@ export const RoutinesSidebar: React.FC<RoutinesSidebarProps> = ({
             title="Manage Genres"
           >
             Manage Genres
+          </button>
+          <button
+            onClick={() => setOpenLevels(true)}
+            className="px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50"
+            title="Manage Levels"
+          >
+            Manage Levels
           </button>
         </div>
         {/* Search Bar */}
@@ -186,6 +253,66 @@ export const RoutinesSidebar: React.FC<RoutinesSidebarProps> = ({
               ))}
             </select>
           </div>
+          
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Level</label>
+            <select
+              value={selectedLevel}
+              onChange={(e) => setSelectedLevel(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="all">All Levels</option>
+              {uniqueLevels.map(level => (
+                <option key={level} value={level}>{level}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="pt-2 border-t border-gray-200 space-y-3">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={hideInactive}
+                onChange={(e) => setHideInactive(e.target.checked)}
+                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+              />
+              <span className="text-xs font-medium text-gray-600">Hide inactive routines</span>
+            </label>
+            
+            <button
+              onClick={() => {
+                // Cycle through: A-Z -> Z-A -> A-Z
+                setSortOrder(current => {
+                  if (current === 'A-Z') return 'Z-A';
+                  if (current === 'Z-A') return 'A-Z';
+                  return 'A-Z';
+                });
+              }}
+              className={`w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg transition-colors text-sm font-medium ${
+                sortOrder !== 'none'
+                  ? 'bg-blue-600 text-white hover:bg-blue-700'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+              title={sortOrder === 'A-Z' ? 'Sort Z-A' : 'Sort A-Z'}
+            >
+              {sortOrder === 'A-Z' ? (
+                <>
+                  <ArrowUpAZ className="w-4 h-4" />
+                  <span>Sort A-Z</span>
+                </>
+              ) : sortOrder === 'Z-A' ? (
+                <>
+                  <ArrowDownAZ className="w-4 h-4" />
+                  <span>Sort Z-A</span>
+                </>
+              ) : (
+                <>
+                  <ArrowUpAZ className="w-4 h-4" />
+                  <span>Unsorted</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -204,13 +331,18 @@ export const RoutinesSidebar: React.FC<RoutinesSidebarProps> = ({
               const scheduledCount = routineScheduledCounts[routine.id] || 0;
               const scheduledHours = routineScheduledHours[routine.id] || 0;
               const isMaxed = scheduledCount >= 6;
+              const isManuallyInactive = routine.isInactive || false;
+              const hasNoSchedule = scheduledCount === 0;
+              const isInactive = isManuallyInactive || hasNoSchedule;
               return (
                 <RoutineCard
                   key={routine.id}
                   routine={routine}
                   onClick={onRoutineClick}
+                  onToggleInactive={onToggleInactive}
                   isMaxed={isMaxed}
                   scheduledHours={scheduledHours}
+                  isInactive={isInactive}
                 />
               );
             })
@@ -223,13 +355,31 @@ export const RoutinesSidebar: React.FC<RoutinesSidebarProps> = ({
         isOpen={openTeachers}
         teachers={teachers}
         onClose={() => setOpenTeachers(false)}
-        onChange={setTeachers}
+        onChange={(next) => {
+          setTeachers(next);
+          // Propagate changes to parent
+          onTeachersChange?.(next);
+        }}
       />
       <ManageGenresModal
         isOpen={openGenres}
         genres={genres}
         onClose={() => setOpenGenres(false)}
-        onChange={setGenres}
+        onChange={(next) => {
+          setGenres(next);
+          // Propagate changes to parent
+          onGenresChange?.(next);
+        }}
+      />
+      <ManageLevelsModal
+        isOpen={openLevels}
+        levels={levels}
+        onClose={() => setOpenLevels(false)}
+        onChange={(next) => {
+          setLevels(next);
+          // Propagate changes to parent
+          onLevelsChange?.(next);
+        }}
       />
     </div>
   );

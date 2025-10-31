@@ -3,24 +3,26 @@
 import React, { useRef, useEffect } from 'react';
 import { Routine } from '../../types/routine';
 import { useRoutineDrag } from '../../hooks/useDragAndDrop';
-import { GripVertical } from 'lucide-react';
+import { GripVertical, Eye, EyeOff } from 'lucide-react';
 
 interface RoutineCardProps {
   routine: Routine;
   onClick: (routine: Routine) => void;
+  onToggleInactive?: (routine: Routine) => void;
   isMaxed?: boolean;
   scheduledHours?: number;
+  isInactive?: boolean;
 }
 
-export const RoutineCard: React.FC<RoutineCardProps> = ({ routine, onClick, isMaxed = false, scheduledHours = 0 }) => {
-  const { drag, isDragging } = useRoutineDrag(routine, !isMaxed);
+export const RoutineCard: React.FC<RoutineCardProps> = ({ routine, onClick, onToggleInactive, isMaxed = false, scheduledHours = 0, isInactive = false }) => {
+  const { drag, isDragging } = useRoutineDrag(routine, !isMaxed && !isInactive);
   const ref = useRef<HTMLDivElement>(null);
   
   useEffect(() => {
-    if (ref.current && !isMaxed) {
+    if (ref.current && !isMaxed && !isInactive) {
       drag(ref.current);
     }
-  }, [drag, isMaxed]);
+  }, [drag, isMaxed, isInactive]);
   
 
   return (
@@ -30,21 +32,29 @@ export const RoutineCard: React.FC<RoutineCardProps> = ({ routine, onClick, isMa
         rounded-lg border-2 p-4 mb-3 transition-all duration-200
         ${isMaxed 
           ? 'bg-gray-100 border-gray-300 cursor-not-allowed opacity-60' 
+          : isInactive
+          ? 'bg-gray-50 border-gray-200 opacity-50 cursor-pointer hover:opacity-70'
           : 'bg-white border-gray-200 cursor-move hover:border-blue-300 hover:shadow-md'
         }
         ${isDragging ? 'opacity-50 scale-95' : ''}
       `}
-      onClick={() => onClick(routine)}
+      onClick={(e) => {
+        // Don't trigger onClick if clicking the toggle button
+        if ((e.target as HTMLElement).closest('.toggle-inactive')) {
+          return;
+        }
+        onClick(routine);
+      }}
       onMouseDown={() => console.log('RoutineCard mouse down:', routine.songTitle)}
     >
       <div className="flex items-start justify-between">
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-2">
             <div 
-              className={`w-3 h-3 rounded-full ${isMaxed ? 'opacity-50' : ''}`}
+              className={`w-3 h-3 rounded-full ${isMaxed || isInactive ? 'opacity-50' : ''}`}
               style={{ backgroundColor: routine.color }}
             />
-            <h3 className={`font-semibold text-sm ${isMaxed ? 'text-gray-500' : 'text-gray-900'}`}>
+            <h3 className={`font-semibold text-sm ${isMaxed || isInactive ? 'text-gray-500' : 'text-gray-900'}`}>
               {routine.songTitle}
             </h3>
           </div>
@@ -75,7 +85,25 @@ export const RoutineCard: React.FC<RoutineCardProps> = ({ routine, onClick, isMa
           </div>
         </div>
         
-        <GripVertical className={`w-4 h-4 ${isMaxed ? 'text-gray-300' : 'text-gray-400'}`} />
+        <div className="flex items-center gap-2">
+          {onToggleInactive && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleInactive(routine);
+              }}
+              className="toggle-inactive p-1 hover:bg-gray-200 rounded transition-colors"
+              title={routine.isInactive ? 'Mark as active' : 'Mark as inactive'}
+            >
+              {routine.isInactive ? (
+                <EyeOff className="w-4 h-4 text-gray-600" />
+              ) : (
+                <Eye className="w-4 h-4 text-gray-400 hover:text-gray-600" />
+              )}
+            </button>
+          )}
+          <GripVertical className={`w-4 h-4 ${isMaxed || isInactive ? 'text-gray-300' : 'text-gray-400'}`} />
+        </div>
       </div>
     </div>
   );

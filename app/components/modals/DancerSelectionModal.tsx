@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { Dancer } from '../../types/dancer';
-import { X, Search, ArrowUpDown, ArrowUp, ArrowDown, Check } from 'lucide-react';
+import { X, Search, ArrowUpDown, ArrowUp, ArrowDown, Check, ChevronDown } from 'lucide-react';
 
 interface DancerSelectionModalProps {
   dancers: Dancer[];
@@ -12,7 +12,7 @@ interface DancerSelectionModalProps {
   onApply: (selectedDancerIds: string[]) => void;
 }
 
-type SortField = 'firstName' | 'lastName' | 'age' | 'birthday' | 'gender' | 'email' | 'phone';
+type SortField = 'firstName' | 'lastName' | 'age' | 'birthday' | 'email' | 'phone';
 type SortDirection = 'asc' | 'desc';
 
 export const DancerSelectionModal: React.FC<DancerSelectionModalProps> = ({
@@ -25,7 +25,8 @@ export const DancerSelectionModal: React.FC<DancerSelectionModalProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [sortField, setSortField] = useState<SortField | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
-  const [filterGender, setFilterGender] = useState<string>('');
+  const [filterClasses, setFilterClasses] = useState<string[]>([]);
+  const [showClassDropdown, setShowClassDropdown] = useState(false);
   const [tempSelectedIds, setTempSelectedIds] = useState<Set<string>>(
     new Set(selectedDancers.map(d => d.id))
   );
@@ -72,9 +73,10 @@ export const DancerSelectionModal: React.FC<DancerSelectionModalProps> = ({
         )) ||
         dancer.name.toLowerCase().includes(searchTerm.toLowerCase());
       
-      const matchesGender = filterGender === '' || dancer.gender === filterGender;
+      const matchesClass = filterClasses.length === 0 || 
+        (dancer.classes && dancer.classes.some(cls => filterClasses.includes(cls)));
       
-      return matchesSearch && matchesGender;
+      return matchesSearch && matchesClass;
     });
 
     if (sortField) {
@@ -98,10 +100,6 @@ export const DancerSelectionModal: React.FC<DancerSelectionModalProps> = ({
           case 'birthday':
             aVal = a.birthday || '';
             bVal = b.birthday || '';
-            break;
-          case 'gender':
-            aVal = a.gender || '';
-            bVal = b.gender || '';
             break;
           case 'email':
             aVal = a.email 
@@ -130,14 +128,16 @@ export const DancerSelectionModal: React.FC<DancerSelectionModalProps> = ({
     }
 
     return filtered;
-  }, [dancers, searchTerm, filterGender, sortField, sortDirection]);
+  }, [dancers, searchTerm, filterClasses, sortField, sortDirection]);
 
-  const genders = useMemo(() => {
-    const genderSet = new Set<string>();
+  const classes = useMemo(() => {
+    const classSet = new Set<string>();
     dancers.forEach(d => {
-      if (d.gender) genderSet.add(d.gender);
+      if (d.classes && d.classes.length > 0) {
+        d.classes.forEach(cls => classSet.add(cls));
+      }
     });
-    return Array.from(genderSet).sort();
+    return Array.from(classSet).sort();
   }, [dancers]);
 
   const formatBirthday = (birthday?: string) => {
@@ -200,17 +200,94 @@ export const DancerSelectionModal: React.FC<DancerSelectionModalProps> = ({
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
-            <div>
-              <select
-                value={filterGender}
-                onChange={(e) => setFilterGender(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            <div className="relative">
+              {/* <label className="block text-xs font-medium text-gray-700 mb-1">
+                Filter by Classes
+              </label> */}
+              <button
+                type="button"
+                onClick={() => setShowClassDropdown(!showClassDropdown)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-left flex items-center justify-between min-h-[42px]"
               >
-                <option value="">All Genders</option>
-                {genders.map(gender => (
-                  <option key={gender} value={gender}>{gender}</option>
-                ))}
-              </select>
+                <div className="flex flex-wrap gap-1 flex-1">
+                  {filterClasses.length === 0 ? (
+                    <span className="text-gray-400">All Classes</span>
+                  ) : filterClasses.length <= 2 ? (
+                    filterClasses.map(cls => (
+                      <span
+                        key={cls}
+                        className="inline-flex items-center px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs"
+                      >
+                        {cls}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setFilterClasses(filterClasses.filter(c => c !== cls));
+                          }}
+                          className="ml-1 hover:text-blue-900"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-gray-700">
+                      {filterClasses.length} selected
+                    </span>
+                  )}
+                </div>
+                <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${showClassDropdown ? 'transform rotate-180' : ''}`} />
+              </button>
+              
+              {showClassDropdown && (
+                <>
+                  <div
+                    className="fixed inset-0 z-10"
+                    onClick={() => setShowClassDropdown(false)}
+                  />
+                  <div className="absolute z-20 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+                    {classes.length === 0 ? (
+                      <div className="p-3 text-sm text-gray-500">No classes available</div>
+                    ) : (
+                      <>
+                        <label className="flex items-center py-2 px-3 hover:bg-gray-50 cursor-pointer border-b border-gray-200 sticky top-0 bg-white">
+                          <input
+                            type="checkbox"
+                            checked={filterClasses.length === classes.length && classes.length > 0}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setFilterClasses([...classes]);
+                              } else {
+                                setFilterClasses([]);
+                              }
+                            }}
+                            className="mr-2 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <span className="text-sm font-medium text-gray-700">Select All</span>
+                        </label>
+                        {classes.map(cls => (
+                          <label key={cls} className="flex items-center py-2 px-3 hover:bg-gray-50 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={filterClasses.includes(cls)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setFilterClasses([...filterClasses, cls]);
+                                } else {
+                                  setFilterClasses(filterClasses.filter(c => c !== cls));
+                                }
+                              }}
+                              className="mr-2 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            <span className="text-sm text-gray-700">{cls}</span>
+                          </label>
+                        ))}
+                      </>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           </div>
           <div className="mt-3 text-sm text-gray-600">
@@ -250,7 +327,6 @@ export const DancerSelectionModal: React.FC<DancerSelectionModalProps> = ({
                 <SortableHeader field="lastName">Last Name</SortableHeader>
                 <SortableHeader field="age">Age</SortableHeader>
                 <SortableHeader field="birthday">Birthday</SortableHeader>
-                <SortableHeader field="gender">Gender</SortableHeader>
                 <SortableHeader field="email">Email</SortableHeader>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[300px]">
                   Classes
@@ -285,9 +361,6 @@ export const DancerSelectionModal: React.FC<DancerSelectionModalProps> = ({
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                       {formatBirthday(dancer.birthday)}
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                      {dancer.gender || '-'}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                       {dancer.email 

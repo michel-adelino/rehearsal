@@ -7,7 +7,7 @@ export async function GET(
 ) {
   const routine = await prisma.routine.findUnique({
     where: { id: params.id },
-    include: { teacher: true, genre: true, dancers: true },
+    include: { teacher: true, genre: true, level: true, dancers: true },
   });
   if (!routine) return NextResponse.json({ message: 'Not found' }, { status: 404 });
   return NextResponse.json(routine);
@@ -18,23 +18,35 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   const body = await req.json();
-  const { songTitle, duration, notes, level, color, teacherId, genreId, dancerIds } = body;
+  const { songTitle, duration, notes, levelId, color, teacherId, genreId, dancerIds, isInactive } = body;
+
+  const updateData: {
+    songTitle?: string;
+    duration?: number;
+    notes?: string | null;
+    levelId?: string | null;
+    color?: string;
+    teacherId?: string;
+    genreId?: string;
+    isInactive?: boolean;
+    dancers?: { set: { id: string }[] };
+  } = {};
+  if (songTitle !== undefined) updateData.songTitle = songTitle;
+  if (duration !== undefined) updateData.duration = duration;
+  if (notes !== undefined) updateData.notes = notes;
+  if (levelId !== undefined) updateData.levelId = levelId || null;
+  if (color !== undefined) updateData.color = color;
+  if (teacherId !== undefined) updateData.teacherId = teacherId;
+  if (genreId !== undefined) updateData.genreId = genreId;
+  if (isInactive !== undefined) updateData.isInactive = isInactive;
+  if (Array.isArray(dancerIds)) {
+    updateData.dancers = { set: dancerIds.map((id: string) => ({ id })) };
+  }
 
   const routine = await prisma.routine.update({
     where: { id: params.id },
-    data: {
-      songTitle,
-      duration,
-      notes,
-      level,
-      color,
-      teacherId,
-      genreId,
-      ...(Array.isArray(dancerIds)
-        ? { dancers: { set: dancerIds.map((id: string) => ({ id })) } }
-        : {}),
-    },
-    include: { teacher: true, genre: true, dancers: true },
+    data: updateData,
+    include: { teacher: true, genre: true, level: true, dancers: true },
   });
   return NextResponse.json(routine);
 }

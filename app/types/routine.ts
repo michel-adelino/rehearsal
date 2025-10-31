@@ -14,17 +14,23 @@ export interface Genre {
   color: string;
 }
 
+export interface Level {
+  id: string;
+  name: string;
+}
+
 export interface Routine {
   id: string;
   songTitle: string;
   dancers: Dancer[];
   teacher: Teacher;
   genre: Genre;
+  level?: Level;
   duration: number; // in minutes
-  level?: string;
   notes?: string;
   scheduledHours: number; // total hours scheduled
   color: string; // for calendar display
+  isInactive?: boolean; // manually marked as inactive
 }
 
 export interface RoutineDetails {
@@ -34,6 +40,6 @@ export interface RoutineDetails {
   teacher: Teacher;
   genre: Genre;
   duration: number;
-  level?: string;
+  level?: Level;
   notes: string;
 }

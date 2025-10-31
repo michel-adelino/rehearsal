@@ -1,23 +1,28 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Routine, Teacher, Genre } from '../../types/routine';
+import { Routine, Teacher, Genre, Level } from '../../types/routine';
 import { Loader2 } from 'lucide-react';
 import { Dancer } from '../../types/dancer';
 import { X, Save, Trash2, Users, Clock, User, Tag, Plus } from 'lucide-react';
 import { DancerSelectionModal } from './DancerSelectionModal';
 import { ManageTeachersModal } from './ManageTeachersModal';
 import { ManageGenresModal } from './ManageGenresModal';
+import { ManageLevelsModal } from './ManageLevelsModal';
 
 interface RoutineDetailsModalProps {
   routine: Routine | null;
   dancers: Dancer[];
   teachers: Teacher[];
   genres: Genre[];
+  levels: Level[];
   isOpen: boolean;
   onClose: () => void;
   onSave: (routine: Routine) => void;
   onDelete: (routineId: string) => void;
+  onTeachersChange?: (teachers: Teacher[]) => void;
+  onGenresChange?: (genres: Genre[]) => void;
+  onLevelsChange?: (levels: Level[]) => void;
   saving?: boolean;
 }
 
@@ -26,10 +31,14 @@ export const RoutineDetailsModal: React.FC<RoutineDetailsModalProps> = ({
   dancers,
   teachers,
   genres,
+  levels,
   isOpen,
   onClose,
   onSave,
   onDelete,
+  onTeachersChange,
+  onGenresChange,
+  onLevelsChange,
   saving = false
 }) => {
   const [editedRoutine, setEditedRoutine] = useState<Routine | null>(null);
@@ -39,8 +48,10 @@ export const RoutineDetailsModal: React.FC<RoutineDetailsModalProps> = ({
   const [selectedDancerName, setSelectedDancerName] = useState<string>('');
   const [showManageTeachers, setShowManageTeachers] = useState(false);
   const [showManageGenres, setShowManageGenres] = useState(false);
+  const [showManageLevels, setShowManageLevels] = useState(false);
   const [localTeachers, setLocalTeachers] = useState<Teacher[]>(teachers);
   const [localGenres, setLocalGenres] = useState<Genre[]>(genres);
+  const [localLevels, setLocalLevels] = useState<Level[]>(levels);
 
   React.useEffect(() => {
     if (routine) {
@@ -50,6 +61,7 @@ export const RoutineDetailsModal: React.FC<RoutineDetailsModalProps> = ({
 
   React.useEffect(() => setLocalTeachers(teachers), [teachers]);
   React.useEffect(() => setLocalGenres(genres), [genres]);
+  React.useEffect(() => setLocalLevels(levels), [levels]);
 
   if (!isOpen || !editedRoutine) return null;
 
@@ -215,18 +227,35 @@ export const RoutineDetailsModal: React.FC<RoutineDetailsModalProps> = ({
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Level
                 </label>
+                <div className="flex gap-2">
                 <select
-                  value={editedRoutine.level || ''}
-                  onChange={(e) => setEditedRoutine(prev => 
-                    prev ? { ...prev, level: e.target.value || undefined } : prev
-                  )}
+                  key={`level-select-${localLevels.length}-${localLevels.map(l => l.id).join(',')}`}
+                  value={editedRoutine.level?.id || ''}
+                  onChange={(e) => {
+                    const level = localLevels.find(l => l.id === e.target.value);
+                    if (level) {
+                      setEditedRoutine(prev => 
+                        prev ? { ...prev, level } : prev
+                      );
+                    } else {
+                      setEditedRoutine(prev => 
+                        prev ? { ...prev, level: undefined } : prev
+                      );
+                    }
+                  }}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-gray-900"
                 >
                   <option value="">Select Level</option>
-                  <option value="Beginner">Beginner</option>
-                  <option value="Intermediate">Intermediate</option>
-                  <option value="Advanced">Advanced</option>
+                  {localLevels.map(level => (
+                    <option key={level.id} value={level.id}>
+                      {level.name}
+                    </option>
+                  ))}
                 </select>
+                <button type="button" className="px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50" onClick={() => setShowManageLevels(true)}>
+                  Manage
+                </button>
+                </div>
               </div>
             </div>
 
@@ -363,6 +392,27 @@ export const RoutineDetailsModal: React.FC<RoutineDetailsModalProps> = ({
               )}
             </div>
 
+            {/* Inactive Status */}
+            <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-lg border border-gray-200">
+              <input
+                type="checkbox"
+                id="isInactive"
+                checked={editedRoutine.isInactive || false}
+                onChange={(e) => setEditedRoutine(prev => 
+                  prev ? { ...prev, isInactive: e.target.checked } : prev
+                )}
+                className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+              />
+              <label htmlFor="isInactive" className="flex-1 cursor-pointer">
+                <span className="block text-sm font-medium text-gray-700">
+                  Mark as inactive
+                </span>
+                <span className="block text-xs text-gray-500 mt-1">
+                  Inactive routines are greyed out and moved to the bottom of the list
+                </span>
+              </label>
+            </div>
+
             {/* Notes */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -431,7 +481,10 @@ export const RoutineDetailsModal: React.FC<RoutineDetailsModalProps> = ({
         teachers={localTeachers}
         onClose={() => setShowManageTeachers(false)}
         onChange={(next) => {
-          setLocalTeachers(next as unknown as Teacher[]);
+          const updatedTeachers = next as unknown as Teacher[];
+          setLocalTeachers(updatedTeachers);
+          // Update parent state to reflect changes across the app
+          onTeachersChange?.(updatedTeachers);
           // If current selection was deleted, align to first item
           if (!next.find(t => t.id === editedRoutine.teacher.id) && next.length > 0) {
             const newTeacher = next[0] as unknown as Teacher;
@@ -446,10 +499,30 @@ export const RoutineDetailsModal: React.FC<RoutineDetailsModalProps> = ({
         genres={localGenres}
         onClose={() => setShowManageGenres(false)}
         onChange={(next) => {
-          setLocalGenres(next as unknown as Genre[]);
+          const updatedGenres = next as unknown as Genre[];
+          setLocalGenres(updatedGenres);
+          // Update parent state to reflect changes across the app
+          onGenresChange?.(updatedGenres);
           if (!next.find(g => g.id === editedRoutine.genre.id) && next.length > 0) {
             const newGenre = next[0] as unknown as Genre;
             setEditedRoutine(prev => (prev ? { ...prev, genre: newGenre, color: newGenre.color } : prev));
+          }
+        }}
+      />
+
+      {/* Manage Levels */}
+      <ManageLevelsModal
+        isOpen={showManageLevels}
+        levels={localLevels}
+        onClose={() => setShowManageLevels(false)}
+        onChange={(next) => {
+          const updatedLevels = next as unknown as Level[];
+          setLocalLevels(updatedLevels);
+          // Update parent state to reflect changes across the app
+          onLevelsChange?.(updatedLevels);
+          // Ensure React re-renders the select by updating localLevels
+          if (editedRoutine.level && !updatedLevels.find(l => l.id === editedRoutine.level?.id)) {
+            setEditedRoutine(prev => (prev ? { ...prev, level: undefined } : prev));
           }
         }}
       />

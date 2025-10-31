@@ -7,6 +7,7 @@ interface SendEmailRequestBody {
   from?: string; // ISO date string (YYYY-MM-DD)
   to?: string;   // ISO date string (YYYY-MM-DD)
   preset?: 'this_week' | 'next_week' | 'this_month';
+  levelIds?: string[];
 }
 
 function getDateRangeFromPreset(preset: 'this_week' | 'next_week' | 'this_month'): { from: Date; to: Date } {
@@ -81,6 +82,23 @@ function buildEmailText(dancerName: string, items: Array<{ date: Date; startMinu
   return `Hi ${dancerName},\n\nHere's your rehearsal schedule for ${rangeLabel}:\n\n${lines}\n\nPlease arrive 10 minutes early for warm-up.\n\nSincerely, Performing Dance Arts.`;
 }
 
+function buildTeacherEmailText(teacherName: string, items: Array<{ date: Date; startMinutes: number; duration: number; songTitle: string; roomName: string; dancerNames: string[] }>, rangeLabel: string): string {
+  if (items.length === 0) {
+    return `Hi ${teacherName},\n\nHere are your rehearsal schedules for ${rangeLabel}:\n\nNo rehearsals scheduled in this period.\n\nSincerely, Performing Dance Arts.`;
+  }
+
+  const lines = items.map((it) => {
+    const start = formatMinutesToHHMM(it.startMinutes);
+    const endTotal = it.startMinutes + it.duration;
+    const end = formatMinutesToHHMM(endTotal);
+    const dayName = dayNameFromDate(it.date);
+    const dancersList = it.dancerNames.length > 0 ? `\n  Dancers: ${it.dancerNames.join(', ')}` : '';
+    return `${dayName} ${it.date.toISOString().slice(0, 10)} - ${formatTime(start.hour, start.minute)} to ${formatTime(end.hour, end.minute)}\n  Routine: ${it.songTitle}\n  Room: ${it.roomName}${dancersList}`;
+  }).join('\n\n');
+
+  return `Hi ${teacherName},\n\nHere are your rehearsal schedules for ${rangeLabel}:\n\n${lines}\n\nSincerely, Performing Dance Arts.`;
+}
+
 async function sendWithSendGrid(toEmail: string, toName: string, subject: string, text: string) {
   const apiKey = process.env.SENDGRID_API_KEY;
   const fromEmail = process.env.SENDGRID_FROM_EMAIL;
@@ -119,7 +137,7 @@ async function sendWithSendGrid(toEmail: string, toName: string, subject: string
 export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as SendEmailRequestBody;
-    const { dancerId, dancerIds, from, to, preset } = body;
+    const { dancerId, dancerIds, from, to, preset, levelIds } = body;
     const targetIds = Array.from(new Set((dancerIds && dancerIds.length ? dancerIds : (dancerId ? [dancerId] : []))));
 
     if (!targetIds.length) {
@@ -176,13 +194,19 @@ export async function POST(req: NextRequest) {
       }
 
       const where: {
-        routine: { dancers: { some: { id: string } } };
+        routine: { 
+          dancers: { some: { id: string } };
+          levelId?: { in: string[] } | null;
+        };
         date?: { gte?: Date; lte?: Date };
       } = {
         routine: {
           dancers: { some: { id } }
         }
       };
+      if (levelIds && levelIds.length > 0) {
+        where.routine.levelId = { in: levelIds };
+      }
       if (fromDate || toDate) {
         where.date = {};
         if (fromDate) where.date.gte = fromDate;
@@ -191,7 +215,7 @@ export async function POST(req: NextRequest) {
 
       const items = await prisma.scheduledRoutine.findMany({
         where,
-        include: { routine: { include: { teacher: true, genre: true, dancers: true } }, room: true },
+        include: { routine: { include: { teacher: true, genre: true, level: true, dancers: true } }, room: true },
         orderBy: [{ date: 'asc' }, { startMinutes: 'asc' }]
       });
 
@@ -222,7 +246,128 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({ success: true, results });
+    // Send emails to teachers about routines
+    const teacherResults: { teacherId: string; status: 'sent' | 'skipped'; reason?: string }[] = [];
+
+    // Collect all unique teacher IDs from routines that match the dancers/levels/date filters
+    const routineWhere: {
+      levelId?: { in: string[] };
+      dancers?: { some: { id: { in: string[] } } };
+    } = {};
+    
+    if (levelIds && levelIds.length > 0) {
+      routineWhere.levelId = { in: levelIds };
+    }
+    if (targetIds.length > 0) {
+      routineWhere.dancers = { some: { id: { in: targetIds } } };
+    }
+
+    const dateWhere: {
+      gte?: Date;
+      lte?: Date;
+    } = {};
+    if (fromDate) dateWhere.gte = fromDate;
+    if (toDate) dateWhere.lte = toDate;
+
+    // Find all scheduled routines that match the criteria to identify which teachers should get emails
+    const relevantScheduledRoutines = await prisma.scheduledRoutine.findMany({
+      where: {
+        routine: Object.keys(routineWhere).length > 0 ? routineWhere : undefined,
+        date: Object.keys(dateWhere).length > 0 ? dateWhere : undefined
+      },
+      include: {
+        routine: {
+          include: {
+            teacher: true
+          }
+        }
+      }
+    });
+
+    // Get unique teacher IDs from routines that match the criteria
+    const teacherIds = Array.from(new Set(relevantScheduledRoutines.map(sr => sr.routine.teacherId)));
+    
+    if (teacherIds.length > 0) {
+      // Get all teachers with their email addresses
+      const teachers = await prisma.teacher.findMany({
+        where: { id: { in: teacherIds } }
+      });
+
+      const teacherById = new Map(teachers.map(t => [t.id, t]));
+
+      // For each teacher, get all their scheduled routines in the date range
+      // This gives teachers their complete schedule for the period
+      for (const teacherId of teacherIds) {
+        const teacher = teacherById.get(teacherId);
+        if (!teacher || !teacher.email) {
+          teacherResults.push({ teacherId, status: 'skipped', reason: teacher ? 'no email' : 'not found' });
+          continue;
+        }
+
+        const teacherWhere: {
+          routine: { teacherId: string; levelId?: { in: string[] } | null };
+          date?: { gte?: Date; lte?: Date };
+        } = {
+          routine: {
+            teacherId
+          }
+        };
+
+        // Apply level filter if provided (to match what dancers received)
+        if (levelIds && levelIds.length > 0) {
+          teacherWhere.routine.levelId = { in: levelIds };
+        }
+
+        // Apply date range filter
+        if (fromDate || toDate) {
+          teacherWhere.date = {};
+          if (fromDate) teacherWhere.date.gte = fromDate;
+          if (toDate) teacherWhere.date.lte = toDate;
+        }
+
+        const teacherItems = await prisma.scheduledRoutine.findMany({
+          where: teacherWhere,
+          include: {
+            routine: {
+              include: {
+                teacher: true,
+                dancers: true
+              }
+            },
+            room: true
+          },
+          orderBy: [{ date: 'asc' }, { startMinutes: 'asc' }]
+        });
+
+        const teacherSimplified = teacherItems.map((it: {
+          date: Date;
+          startMinutes: number;
+          duration: number;
+          routine: { songTitle: string; dancers: Array<{ name: string }> };
+          room: { name: string };
+        }) => ({
+          date: new Date(it.date),
+          startMinutes: it.startMinutes,
+          duration: it.duration,
+          songTitle: it.routine.songTitle,
+          roomName: it.room.name,
+          dancerNames: it.routine.dancers.map(d => d.name)
+        }));
+
+        const teacherSubject = `Your rehearsal schedule for ${rangeLabel}`;
+        const teacherText = buildTeacherEmailText(teacher.name, teacherSimplified, rangeLabel);
+
+        try {
+          await sendWithSendGrid(teacher.email, teacher.name, teacherSubject, teacherText);
+          teacherResults.push({ teacherId, status: 'sent' });
+        } catch (e: unknown) {
+          const errorMessage = e instanceof Error ? e.message : 'send failed';
+          teacherResults.push({ teacherId, status: 'skipped', reason: errorMessage });
+        }
+      }
+    }
+
+    return NextResponse.json({ success: true, results, teacherResults });
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Failed to send email';
     return NextResponse.json({ message: errorMessage }, { status: 500 });

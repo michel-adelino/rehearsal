@@ -136,7 +136,7 @@ export const ScheduledDancersModal: React.FC<ScheduledDancersModalProps> = ({
               {routine.level && (
                 <div>
                   <span className="text-gray-500">Level:</span>
-                  <span className="ml-2 font-medium text-gray-900">{routine.level}</span>
+                  <span className="ml-2 font-medium text-gray-900">{routine.level.name}</span>
                 </div>
               )}
               <div>

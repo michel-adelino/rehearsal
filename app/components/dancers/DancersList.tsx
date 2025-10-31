@@ -32,7 +32,8 @@ export const DancersList: React.FC<DancersListProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [filterLevel, setFilterLevel] = useState<string>('');
   const [filterGenre, setFilterGenre] = useState<string>('');
-  const [filterGender, setFilterGender] = useState<string>('');
+  const [filterClasses, setFilterClasses] = useState<string[]>([]);
+  const [showClassDropdown, setShowClassDropdown] = useState(false);
   const [expandedDancers, setExpandedDancers] = useState<Set<string>>(new Set());
   const [showClassesModal, setShowClassesModal] = useState(false);
   const [selectedDancerClasses, setSelectedDancerClasses] = useState<string[]>([]);
@@ -88,12 +89,14 @@ export const DancersList: React.FC<DancersListProps> = ({
     return Array.from(genreSet).sort();
   }, [dancers]);
 
-  const genders = useMemo(() => {
-    const genderSet = new Set<string>();
+  const classes = useMemo(() => {
+    const classSet = new Set<string>();
     dancers.forEach(d => {
-      if (d.gender) genderSet.add(d.gender);
+      if (d.classes && d.classes.length > 0) {
+        d.classes.forEach(cls => classSet.add(cls));
+      }
     });
-    return Array.from(genderSet).sort();
+    return Array.from(classSet).sort();
   }, [dancers]);
 
   // Filter and search dancers
@@ -116,12 +119,13 @@ export const DancersList: React.FC<DancersListProps> = ({
       const matchesGenre = filterGenre === '' ||
         (dancer.genres && dancer.genres.some(g => g.toLowerCase() === filterGenre.toLowerCase()));
 
-      // Gender filter
-      const matchesGender = filterGender === '' || dancer.gender === filterGender;
+      // Class filter
+      const matchesClass = filterClasses.length === 0 ||
+        (dancer.classes && dancer.classes.some(cls => filterClasses.includes(cls)));
 
-      return matchesSearch && matchesLevel && matchesGenre && matchesGender;
+      return matchesSearch && matchesLevel && matchesGenre && matchesClass;
     });
-  }, [dancers, searchTerm, filterLevel, filterGenre, filterGender]);
+  }, [dancers, searchTerm, filterLevel, filterGenre, filterClasses]);
 
   const allVisibleSelected = useMemo(() =>
     filteredDancers.length > 0 && filteredDancers.every(d => selectedIds.has(d.id))
@@ -235,17 +239,94 @@ export const DancersList: React.FC<DancersListProps> = ({
               ))}
             </select>
           </div>
-          <div>
-            <select
-              value={filterGender}
-              onChange={(e) => setFilterGender(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+          <div className="relative">
+            {/* <label className="block text-xs font-medium text-gray-700 mb-1">
+              Filter by Classes
+            </label> */}
+            <button
+              type="button"
+              onClick={() => setShowClassDropdown(!showClassDropdown)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-left flex items-center justify-between min-h-[42px]"
             >
-              <option value="">All Genders</option>
-              {genders.map(gender => (
-                <option key={gender} value={gender}>{gender}</option>
-              ))}
-            </select>
+              <div className="flex flex-wrap gap-1 flex-1">
+                {filterClasses.length === 0 ? (
+                  <span className="text-gray-400">All Classes</span>
+                ) : filterClasses.length <= 2 ? (
+                  filterClasses.map(cls => (
+                    <span
+                      key={cls}
+                      className="inline-flex items-center px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs"
+                    >
+                      {cls}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setFilterClasses(filterClasses.filter(c => c !== cls));
+                        }}
+                        className="ml-1 hover:text-blue-900"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-gray-700">
+                    {filterClasses.length} selected
+                  </span>
+                )}
+              </div>
+              <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${showClassDropdown ? 'transform rotate-180' : ''}`} />
+            </button>
+            
+            {showClassDropdown && (
+              <>
+                <div
+                  className="fixed inset-0 z-10"
+                  onClick={() => setShowClassDropdown(false)}
+                />
+                <div className="absolute z-20 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+                  {classes.length === 0 ? (
+                    <div className="p-3 text-sm text-gray-500">No classes available</div>
+                  ) : (
+                    <>
+                      <label className="flex items-center py-2 px-3 hover:bg-gray-50 cursor-pointer border-b border-gray-200 sticky top-0 bg-white">
+                        <input
+                          type="checkbox"
+                          checked={filterClasses.length === classes.length && classes.length > 0}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setFilterClasses([...classes]);
+                            } else {
+                              setFilterClasses([]);
+                            }
+                          }}
+                          className="mr-2 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <span className="text-sm font-medium text-gray-700">Select All</span>
+                      </label>
+                      {classes.map(cls => (
+                        <label key={cls} className="flex items-center py-2 px-3 hover:bg-gray-50 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={filterClasses.includes(cls)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setFilterClasses([...filterClasses, cls]);
+                              } else {
+                                setFilterClasses(filterClasses.filter(c => c !== cls));
+                              }
+                            }}
+                            className="mr-2 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <span className="text-sm text-gray-700">{cls}</span>
+                        </label>
+                      ))}
+                    </>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         </div>
 

@@ -3,26 +3,25 @@
 import React from 'react';
 import { X, Plus, Trash2, Save, Loader2 } from 'lucide-react';
 
-export interface ManageTeachersModalProps {
+export interface ManageLevelsModalProps {
   isOpen: boolean;
-  teachers: { id: string; name: string; email?: string | null }[];
+  levels: { id: string; name: string }[];
   onClose: () => void;
-  onChange: (next: { id: string; name: string; email?: string | null }[]) => void;
+  onChange: (next: { id: string; name: string }[]) => void;
 }
 
-export const ManageTeachersModal: React.FC<ManageTeachersModalProps> = ({ isOpen, teachers, onClose, onChange }) => {
-  const [items, setItems] = React.useState(teachers);
+export const ManageLevelsModal: React.FC<ManageLevelsModalProps> = ({ isOpen, levels, onClose, onChange }) => {
+  const [items, setItems] = React.useState(levels);
   const [newName, setNewName] = React.useState('');
-  const [newEmail, setNewEmail] = React.useState('');
   const [saving, setSaving] = React.useState(false);
   const [loadingId, setLoadingId] = React.useState<string | null>(null);
 
-  React.useEffect(() => setItems(teachers), [teachers]);
+  React.useEffect(() => setItems(levels), [levels]);
 
   if (!isOpen) return null;
 
   const refresh = async () => {
-    const res = await fetch('/api/teachers');
+    const res = await fetch('/api/levels');
     const data = await res.json();
     setItems(data);
     onChange(data);
@@ -33,9 +32,8 @@ export const ManageTeachersModal: React.FC<ManageTeachersModalProps> = ({ isOpen
     setSaving(true);
     setLoadingId('create');
     try {
-      await fetch('/api/teachers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: newName.trim(), email: newEmail.trim() || null }) });
+      await fetch('/api/levels', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: newName.trim() }) });
       setNewName('');
-      setNewEmail('');
       await refresh();
     } finally {
       setSaving(false);
@@ -43,10 +41,10 @@ export const ManageTeachersModal: React.FC<ManageTeachersModalProps> = ({ isOpen
     }
   };
 
-  const updateItem = async (id: string, name: string, email?: string | null) => {
+  const updateItem = async (id: string, name: string) => {
     setLoadingId(id);
     try {
-      await fetch(`/api/teachers/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, email: email ?? null }) });
+      await fetch(`/api/levels/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
       await refresh();
     } finally {
       setLoadingId(null);
@@ -56,7 +54,7 @@ export const ManageTeachersModal: React.FC<ManageTeachersModalProps> = ({ isOpen
   const deleteItem = async (id: string) => {
     setLoadingId(id);
     try {
-      await fetch(`/api/teachers/${id}`, { method: 'DELETE' });
+      await fetch(`/api/levels/${id}`, { method: 'DELETE' });
       await refresh();
     } finally {
       setLoadingId(null);
@@ -69,13 +67,13 @@ export const ManageTeachersModal: React.FC<ManageTeachersModalProps> = ({ isOpen
         <div className="absolute inset-0 bg-black bg-opacity-20 flex items-center justify-center z-[61]">
           <div className="bg-white rounded-lg p-4 shadow-lg flex items-center gap-3">
             <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
-            <span className="text-gray-700">Creating teacher...</span>
+            <span className="text-gray-700">Creating level...</span>
           </div>
         </div>
       )}
       <div className="bg-white rounded-lg shadow-xl w-full max-w-xl max-h-[85vh] overflow-hidden flex flex-col">
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-900">Manage Teachers</h2>
+          <h2 className="text-xl font-semibold text-gray-900">Manage Levels</h2>
           <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
             <X className="w-5 h-5" />
           </button>
@@ -87,14 +85,7 @@ export const ManageTeachersModal: React.FC<ManageTeachersModalProps> = ({ isOpen
               type="text"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              placeholder="Teacher name"
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-            <input
-              type="email"
-              value={newEmail}
-              onChange={(e) => setNewEmail(e.target.value)}
-              placeholder="Email (optional)"
+              placeholder="Level name"
               className="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
             <button onClick={createItem} disabled={saving || !newName.trim()} className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center">
@@ -107,11 +98,11 @@ export const ManageTeachersModal: React.FC<ManageTeachersModalProps> = ({ isOpen
           </div>
 
           <div className="divide-y divide-gray-200 border border-gray-200 rounded-lg overflow-hidden">
-            {items.map((t) => (
-              <TeacherRow key={t.id} teacher={t} onSave={updateItem} onDelete={deleteItem} loading={loadingId === t.id} saving={saving} />
+            {items.map((l) => (
+              <LevelRow key={l.id} level={l} onSave={updateItem} onDelete={deleteItem} loading={loadingId === l.id} saving={saving} />
             ))}
             {items.length === 0 && (
-              <div className="p-6 text-center text-gray-500">No teachers yet.</div>
+              <div className="p-6 text-center text-gray-500">No levels yet.</div>
             )}
           </div>
         </div>
@@ -126,15 +117,14 @@ export const ManageTeachersModal: React.FC<ManageTeachersModalProps> = ({ isOpen
   );
 };
 
-const TeacherRow: React.FC<{
-  teacher: { id: string; name: string; email?: string | null };
-  onSave: (id: string, name: string, email?: string | null) => void;
+const LevelRow: React.FC<{
+  level: { id: string; name: string };
+  onSave: (id: string, name: string) => void;
   onDelete: (id: string) => void;
   loading: boolean;
   saving: boolean;
-}> = ({ teacher, onSave, onDelete, loading, saving }) => {
-  const [name, setName] = React.useState(teacher.name);
-  const [email, setEmail] = React.useState(teacher.email ?? '');
+}> = ({ level, onSave, onDelete, loading, saving }) => {
+  const [name, setName] = React.useState(level.name);
 
   return (
     <div className="flex items-center gap-2 p-3">
@@ -144,21 +134,14 @@ const TeacherRow: React.FC<{
         disabled={loading}
         className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
       />
-      <input
-        type="email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        disabled={loading}
-        className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
-      />
-      <button onClick={() => onSave(teacher.id, name.trim(), email.trim() || null)} disabled={loading || saving || !name.trim()} className="px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 shrink-0 flex items-center justify-center">
+      <button onClick={() => onSave(level.id, name.trim())} disabled={loading || saving || !name.trim()} className="px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 shrink-0 flex items-center justify-center">
         {loading ? (
           <Loader2 className="w-4 h-4 animate-spin" />
         ) : (
           <Save className="w-4 h-4" />
         )}
       </button>
-      <button onClick={() => onDelete(teacher.id)} disabled={loading || saving} className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg shrink-0 flex items-center justify-center">
+      <button onClick={() => onDelete(level.id)} disabled={loading || saving} className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg shrink-0 flex items-center justify-center">
         {loading ? (
           <Loader2 className="w-4 h-4 animate-spin" />
         ) : (
@@ -168,5 +151,4 @@ const TeacherRow: React.FC<{
     </div>
   );
 };
-
 

@@ -25,7 +25,6 @@ export const DancerAddModal: React.FC<DancerAddModalProps> = ({
     phone: '',
     email: '',
     classes: [],
-    level: undefined,
     genres: []
   });
   const [classesInput, setClassesInput] = useState<string>('');
@@ -43,7 +42,6 @@ export const DancerAddModal: React.FC<DancerAddModalProps> = ({
       phone: '',
       email: '',
       classes: [],
-      level: undefined,
       genres: []
     });
     setClassesInput('');
@@ -90,7 +88,6 @@ export const DancerAddModal: React.FC<DancerAddModalProps> = ({
       phone: newDancer.phone || undefined,
       email: email,
       classes: classes.length > 0 ? classes : undefined,
-      level: newDancer.level,
       genres: genres.length > 0 ? genres : undefined
     };
 
@@ -259,26 +256,6 @@ export const DancerAddModal: React.FC<DancerAddModalProps> = ({
                 rows={3}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
-            </div>
-
-            {/* Level */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Level
-              </label>
-              <select
-                value={newDancer.level || ''}
-                onChange={(e) => setNewDancer(prev => ({
-                  ...prev,
-                  level: e.target.value as 'beginner' | 'intermediate' | 'advanced' | undefined
-                }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">Select Level</option>
-                <option value="beginner">Beginner</option>
-                <option value="intermediate">Intermediate</option>
-                <option value="advanced">Advanced</option>
-              </select>
             </div>
 
             {/* Genres */}

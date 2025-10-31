@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
 
   const items = await prisma.scheduledRoutine.findMany({
     where,
-    include: { routine: { include: { teacher: true, genre: true, dancers: true } }, room: true },
+    include: { routine: { include: { teacher: true, genre: true, level: true, dancers: true } }, room: true },
     orderBy: [{ date: 'asc' }, { startMinutes: 'asc' }],
   });
   return NextResponse.json(items);
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
         routineId,
         roomId,
       },
-      include: { routine: { include: { teacher: true, genre: true, dancers: true } }, room: true },
+      include: { routine: { include: { teacher: true, genre: true, level: true, dancers: true } }, room: true },
     });
     return NextResponse.json(created, { status: 201 });
   } catch (e: unknown) {

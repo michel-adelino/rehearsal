@@ -3,7 +3,7 @@ import { prisma } from '@/app/lib/prisma';
 
 export async function GET() {
   const routines = await prisma.routine.findMany({
-    include: { teacher: true, genre: true, dancers: true },
+    include: { teacher: true, genre: true, level: true, dancers: true },
     orderBy: { songTitle: 'asc' },
   });
   return NextResponse.json(routines);
@@ -15,11 +15,12 @@ export async function POST(req: NextRequest) {
     songTitle,
     duration,
     notes,
-    level,
+    levelId,
     color,
     teacherId,
     genreId,
     dancerIds = [],
+    isInactive = false,
   } = body;
 
   // Create new routine (PATCH is used for updates)
@@ -28,13 +29,14 @@ export async function POST(req: NextRequest) {
       songTitle,
       duration,
       notes,
-      level,
+      levelId: levelId || null,
       color,
       teacherId,
       genreId,
+      isInactive,
       dancers: { connect: dancerIds.map((id: string) => ({ id })) },
     },
-    include: { teacher: true, genre: true, dancers: true },
+    include: { teacher: true, genre: true, level: true, dancers: true },
   });
 
   return NextResponse.json(routine, { status: 201 });
@@ -47,11 +49,12 @@ export async function PATCH(req: NextRequest) {
     songTitle,
     duration,
     notes,
-    level,
+    levelId,
     color,
     teacherId,
     genreId,
     dancerIds = [],
+    isInactive,
   } = body;
 
   if (!id) {
@@ -62,19 +65,21 @@ export async function PATCH(req: NextRequest) {
     songTitle?: string;
     duration?: number;
     notes?: string | null;
-    level?: string | null;
+    levelId?: string | null;
     color?: string;
     teacherId?: string;
     genreId?: string;
+    isInactive?: boolean;
     dancers?: { set: { id: string }[] };
   } = {
     ...(songTitle !== undefined && { songTitle }),
     ...(duration !== undefined && { duration }),
     ...(notes !== undefined && { notes }),
-    ...(level !== undefined && { level }),
+    ...(levelId !== undefined && { levelId: levelId || null }),
     ...(color !== undefined && { color }),
     ...(teacherId !== undefined && { teacherId }),
     ...(genreId !== undefined && { genreId }),
+    ...(isInactive !== undefined && { isInactive }),
   };
 
   // Always update dancers if dancerIds is provided
@@ -87,7 +92,7 @@ export async function PATCH(req: NextRequest) {
   const routine = await prisma.routine.update({
     where: { id },
     data: updateData,
-    include: { teacher: true, genre: true, dancers: true },
+    include: { teacher: true, genre: true, level: true, dancers: true },
   });
 
   return NextResponse.json(routine);

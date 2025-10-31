@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import { mockRoutines, mockTeachers, mockGenres } from '../app/data/mockRoutines';
+import { mockRoutines, mockTeachers, mockGenres, mockLevels } from '../app/data/mockRoutines';
 import { mockDancers } from '../app/data/mockDancers';
 import { mockRooms, mockScheduledRoutines } from '../app/data/mockSchedules';
 
@@ -21,6 +21,15 @@ async function main() {
       where: { id: g.id },
       update: { name: g.name, color: g.color },
       create: { id: g.id, name: g.name, color: g.color },
+    });
+  }
+
+  // Levels
+  for (const l of mockLevels) {
+    await prisma.level.upsert({
+      where: { id: l.id },
+      update: { name: l.name },
+      create: { id: l.id, name: l.name },
     });
   }
 
@@ -84,7 +93,7 @@ async function main() {
         songTitle: r.songTitle,
         duration: r.duration,
         notes: r.notes ?? null,
-        level: r.level ?? null,
+        levelId: r.level?.id ?? null,
         color: r.color,
         teacherId: r.teacher.id,
         genreId: r.genre.id,
@@ -95,7 +104,7 @@ async function main() {
         songTitle: r.songTitle,
         duration: r.duration,
         notes: r.notes ?? null,
-        level: r.level ?? null,
+        levelId: r.level?.id ?? null,
         color: r.color,
         teacherId: r.teacher.id,
         genreId: r.genre.id,

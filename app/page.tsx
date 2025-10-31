@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
+import Image from 'next/image';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { Toaster, toast } from 'react-hot-toast';
@@ -19,15 +20,17 @@ import { CsvImportModal } from './components/modals/CsvImportModal';
 import { DancerEditModal } from './components/modals/DancerEditModal';
 import { DancerAddModal } from './components/modals/DancerAddModal';
 import { ExportScheduleModal } from './components/modals/ExportScheduleModal';
+import { ScheduleOptionsModal } from './components/modals/ScheduleOptionsModal';
 import { LoadingOverlay } from './components/common/LoadingOverlay';
 
 // Types
-import { Routine } from './types/routine';
+import { Routine, Teacher, Genre } from './types/routine';
 import { ScheduledRoutine, Room } from './types/schedule';
 import { Dancer } from './types/dancer';
 
 // Data
 import { mockTeachers, mockGenres } from './data/mockRoutines';
+import { Level } from './types/routine';
 import { mockRooms } from './data/mockSchedules';
 
 // Hooks
@@ -50,6 +53,7 @@ export default function Home() {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSavingRoutine, setIsSavingRoutine] = useState(false);
   const [isSavingSchedule, setIsSavingSchedule] = useState(false);
+  const [isTogglingInactive, setIsTogglingInactive] = useState(false);
   
   // Modal states
   const [selectedRoutine, setSelectedRoutine] = useState<Routine | null>(null);
@@ -62,7 +66,38 @@ export default function Home() {
   const [selectedDancer, setSelectedDancer] = useState<Dancer | null>(null);
   const [showDancerEditModal, setShowDancerEditModal] = useState(false);
   const [showDancerAddModal, setShowDancerAddModal] = useState(false);
+  const [showScheduleOptionsModal, setShowScheduleOptionsModal] = useState(false);
+  const [pendingScheduleRoutine, setPendingScheduleRoutine] = useState<Routine | null>(null);
+  const [pendingScheduleTimeSlot, setPendingScheduleTimeSlot] = useState<{ hour: number; minute: number; day: number; roomId: string; date: string } | null>(null);
   
+  // Load teachers, genres, and levels
+  const [teachers, setTeachers] = useState(Array.from(mockTeachers));
+  const [genres, setGenres] = useState(Array.from(mockGenres));
+  const [levels, setLevels] = useState<Level[]>([]);
+
+  useEffect(() => {
+    const loadMetaData = async () => {
+      try {
+        const [tRes, gRes, lRes] = await Promise.all([
+          fetch('/api/teachers'),
+          fetch('/api/genres'),
+          fetch('/api/levels')
+        ]);
+        const [tData, gData, lData] = await Promise.all([
+          tRes.json(),
+          gRes.json(),
+          lRes.json()
+        ]);
+        setTeachers(tData);
+        setGenres(gData);
+        setLevels(lData);
+      } catch (e) {
+        console.error('Failed to load metadata', e);
+      }
+    };
+    loadMetaData();
+  }, []);
+
   // Initial data fetch
   useEffect(() => {
     const load = async () => {
@@ -227,11 +262,12 @@ export default function Home() {
           songTitle: updatedRoutine.songTitle,
           duration: updatedRoutine.duration,
           notes: updatedRoutine.notes,
-          level: updatedRoutine.level,
+          levelId: updatedRoutine.level?.id || null,
           color: updatedRoutine.color,
           teacherId: updatedRoutine.teacher.id,
           genreId: updatedRoutine.genre.id,
           dancerIds: dancerIds,
+          isInactive: updatedRoutine.isInactive || false,
         }),
       });
       
@@ -288,84 +324,197 @@ export default function Home() {
     setSelectedRoutine(null);
   }, []);
 
+  const handleToggleRoutineInactive = useCallback(async (routine: Routine) => {
+    setIsTogglingInactive(true);
+    try {
+      const newInactiveStatus = !routine.isInactive;
+      const res = await fetch(`/api/routines/${routine.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isInactive: newInactiveStatus }),
+      });
+      
+      if (!res.ok) throw new Error('Failed to toggle inactive status');
+      const updated = await res.json();
+      
+      // Update the routine in the routines array
+      setRoutines(prev => prev.map(r => r.id === updated.id ? { ...r, ...updated } : r));
+      
+      // Also update scheduled routines if needed
+      setScheduledRoutines(prev => prev.map(sr => {
+        if (sr.routineId === updated.id) {
+          return { ...sr, routine: { ...sr.routine, ...updated } };
+        }
+        return sr;
+      }));
+      
+      toast.success(newInactiveStatus ? 'Routine marked as inactive' : 'Routine marked as active');
+    } catch (e: unknown) {
+      console.error('Failed to toggle inactive status:', e);
+      const errorMessage = e instanceof Error ? e.message : 'Failed to toggle inactive status';
+      toast.error(errorMessage);
+    } finally {
+      setIsTogglingInactive(false);
+    }
+  }, []);
+
   const handleDropRoutine = useCallback((routine: Routine, timeSlot: { hour: number; minute: number; day: number; roomId: string; date: string }) => {
     console.log('handleDropRoutine called:', { routine: routine.songTitle, timeSlot });
     
-    const newScheduledRoutine: ScheduledRoutine = {
-      id: `scheduled-${Date.now()}`,
-      routineId: routine.id,
-      routine: routine,
-      roomId: timeSlot.roomId,
-      startTime: { hour: timeSlot.hour, minute: timeSlot.minute, day: timeSlot.day },
-      endTime: addMinutesToTime({ hour: timeSlot.hour, minute: timeSlot.minute, day: timeSlot.day }, routine.duration),
-      duration: routine.duration,
-      date: timeSlot.date // Store the actual date
-    };
+    // Store the routine and time slot for the modal
+    setPendingScheduleRoutine(routine);
+    setPendingScheduleTimeSlot(timeSlot);
+    setShowScheduleOptionsModal(true);
+  }, []);
 
-    console.log('New scheduled routine created:', newScheduledRoutine);
-
-    // First check if the same routine is already scheduled at this exact time slot
-    const sameRoutineAtSlot = scheduledRoutines.find(sr => {
-      return sr.routineId === routine.id &&
-             sr.roomId === timeSlot.roomId &&
-             sr.date === timeSlot.date &&
-             sr.startTime.hour === timeSlot.hour &&
-             sr.startTime.minute === timeSlot.minute;
-    });
-    
-    if (sameRoutineAtSlot) {
-      const roomName = rooms.find(r => r.id === timeSlot.roomId)?.name || 'Studio';
-      const conflictTime = formatTime(timeSlot.hour, timeSlot.minute);
-      toast.error(`"${routine.songTitle}" is already scheduled at ${roomName} on ${conflictTime}. Cannot schedule the same routine twice at the same time slot.`);
-      console.log('Same routine already scheduled at this time slot - cannot schedule routine');
+  const handleConfirmSchedule = useCallback((options: { isRecurring: boolean; weeks: number; endDate?: string }) => {
+    if (!pendingScheduleRoutine || !pendingScheduleTimeSlot) {
       return;
     }
 
-    // Strict room overlap detection (all overlaps)
-    const roomOverlaps = getRoomOverlaps(scheduledRoutines, newScheduledRoutine);
-    if (roomOverlaps.length > 0) {
-      const roomName = rooms.find(r => r.id === timeSlot.roomId)?.name || 'Studio';
-      const first = roomOverlaps[0];
-      const conflictTime = formatTime(first.startTime.hour, first.startTime.minute);
-      toast.error(`${roomName} already has "${first.routine.songTitle}" scheduled at ${conflictTime}. Only one routine can be scheduled per studio at a time.`);
-      console.log('Room conflict detected - cannot schedule routine');
-      return;
-    }
+    const routine = pendingScheduleRoutine;
+    const timeSlot = pendingScheduleTimeSlot;
+    const { isRecurring, weeks, endDate } = options;
 
-    // Check for dancer conflicts
-    const hasConflicts = checkConflicts(scheduledRoutines, newScheduledRoutine, rooms);
+    // Calculate all scheduled routines to create
+    const scheduledRoutinesToCreate: ScheduledRoutine[] = [];
     
-    console.log('Conflict check result:', hasConflicts);
-    console.log('Current scheduled routines:', scheduledRoutines.length);
-    
-    if (hasConflicts) {
-      // Store as pending and wait for user decision
-      console.log('Conflicts detected - storing routine as pending');
-      setPendingScheduledRoutine(newScheduledRoutine);
-      setPendingRoutine(routine);
-      // Modal will be shown by checkConflicts
+    if (isRecurring) {
+      // Generate recurring schedules
+      const startDate = new Date(timeSlot.date);
+      const endDateObj = endDate ? new Date(endDate) : null;
+      
+      // Calculate how many weeks to create
+      let weeksToCreate = weeks;
+      if (endDateObj) {
+        const diffTime = endDateObj.getTime() - startDate.getTime();
+        const diffWeeks = Math.ceil(diffTime / (7 * 24 * 60 * 60 * 1000));
+        weeksToCreate = Math.max(weeks, diffWeeks);
+      }
+
+      // Create one scheduled routine per week
+      const baseTimestamp = Date.now();
+      for (let week = 0; week < weeksToCreate; week++) {
+        const scheduleDate = new Date(startDate);
+        scheduleDate.setDate(scheduleDate.getDate() + (week * 7));
+        
+        // If endDate is specified, stop if we exceed it
+        if (endDateObj && scheduleDate > endDateObj) {
+          break;
+        }
+
+        const scheduleDateStr = scheduleDate.toISOString().split('T')[0];
+        const dayOfWeek = scheduleDate.getDay();
+
+        scheduledRoutinesToCreate.push({
+          id: `scheduled-${baseTimestamp}-${week}-${Math.random().toString(36).substring(2, 11)}`,
+          routineId: routine.id,
+          routine: routine,
+          roomId: timeSlot.roomId,
+          startTime: { hour: timeSlot.hour, minute: timeSlot.minute, day: dayOfWeek },
+          endTime: addMinutesToTime({ hour: timeSlot.hour, minute: timeSlot.minute, day: dayOfWeek }, routine.duration),
+          duration: routine.duration,
+          date: scheduleDateStr
+        });
+      }
     } else {
-      // No conflicts, add immediately
-      console.log('No conflicts - adding routine to schedule');
-      
-      // Count how many times this routine is already scheduled
-      const currentCount = scheduledRoutines.filter(sr => sr.routineId === routine.id).length;
-      const newCount = currentCount + 1;
-      
-      // Add to state (don't save to database yet)
-      setScheduledRoutines(prev => {
-        const updated = [...prev, newScheduledRoutine];
-        console.log('Updated scheduled routines:', updated.length);
-        return updated;
+      // Single schedule
+      const newScheduledRoutine: ScheduledRoutine = {
+        id: `scheduled-${Date.now()}`,
+        routineId: routine.id,
+        routine: routine,
+        roomId: timeSlot.roomId,
+        startTime: { hour: timeSlot.hour, minute: timeSlot.minute, day: timeSlot.day },
+        endTime: addMinutesToTime({ hour: timeSlot.hour, minute: timeSlot.minute, day: timeSlot.day }, routine.duration),
+        duration: routine.duration,
+        date: timeSlot.date
+      };
+      scheduledRoutinesToCreate.push(newScheduledRoutine);
+    }
+
+    // Validate all schedules before adding
+    const conflicts: string[] = [];
+    
+    for (const newScheduledRoutine of scheduledRoutinesToCreate) {
+      // Check if the same routine is already scheduled at this exact time slot
+      const sameRoutineAtSlot = scheduledRoutines.find(sr => {
+        return sr.routineId === routine.id &&
+               sr.roomId === newScheduledRoutine.roomId &&
+               sr.date === newScheduledRoutine.date &&
+               sr.startTime.hour === newScheduledRoutine.startTime.hour &&
+               sr.startTime.minute === newScheduledRoutine.startTime.minute;
       });
       
-      // Update routine's scheduled hours (temporary)
-      setRoutines(prev => prev.map(r => 
-        r.id === routine.id 
-          ? { ...r, scheduledHours: r.scheduledHours + (routine.duration / 60) }
-          : r
-      ));
+      if (sameRoutineAtSlot) {
+        const roomName = rooms.find(r => r.id === newScheduledRoutine.roomId)?.name || 'Studio';
+        const conflictTime = formatTime(newScheduledRoutine.startTime.hour, newScheduledRoutine.startTime.minute);
+        conflicts.push(`"${routine.songTitle}" is already scheduled at ${roomName} on ${new Date(newScheduledRoutine.date).toLocaleDateString()} at ${conflictTime}.`);
+        continue;
+      }
+
+      // Strict room overlap detection
+      const roomOverlaps = getRoomOverlaps(scheduledRoutines, newScheduledRoutine);
+      if (roomOverlaps.length > 0) {
+        const roomName = rooms.find(r => r.id === newScheduledRoutine.roomId)?.name || 'Studio';
+        const first = roomOverlaps[0];
+        const conflictTime = formatTime(first.startTime.hour, first.startTime.minute);
+        conflicts.push(`${roomName} already has "${first.routine.songTitle}" scheduled on ${new Date(newScheduledRoutine.date).toLocaleDateString()} at ${conflictTime}.`);
+        continue;
+      }
+
+      // Check for dancer conflicts
+      const hasConflicts = checkConflicts(scheduledRoutines, newScheduledRoutine, rooms);
       
+      if (hasConflicts) {
+        // For recurring schedules with conflicts, we'll store the first one as pending
+        // and let the conflict modal handle it
+        console.log('Conflicts detected - storing routine as pending');
+        setPendingScheduledRoutine(newScheduledRoutine);
+        setPendingRoutine(routine);
+        setShowScheduleOptionsModal(false);
+        setPendingScheduleRoutine(null);
+        setPendingScheduleTimeSlot(null);
+        return;
+      }
+    }
+
+    // If there are room/routine conflicts, show error
+    if (conflicts.length > 0) {
+      toast.error(conflicts[0]);
+      setShowScheduleOptionsModal(false);
+      setPendingScheduleRoutine(null);
+      setPendingScheduleTimeSlot(null);
+      return;
+    }
+
+    // No conflicts, add all schedules
+    console.log(`Adding ${scheduledRoutinesToCreate.length} scheduled routine(s) to schedule`);
+    
+    // Count how many times this routine is already scheduled
+    const currentCount = scheduledRoutines.filter(sr => sr.routineId === routine.id).length;
+    const newCount = currentCount + scheduledRoutinesToCreate.length;
+    
+    // Add all to state (don't save to database yet)
+    setScheduledRoutines(prev => {
+      const updated = [...prev, ...scheduledRoutinesToCreate];
+      console.log('Updated scheduled routines:', updated.length);
+      return updated;
+    });
+    
+    // Update routine's scheduled hours (temporary)
+    const totalHours = scheduledRoutinesToCreate.length * (routine.duration / 60);
+    setRoutines(prev => prev.map(r => 
+      r.id === routine.id 
+        ? { ...r, scheduledHours: r.scheduledHours + totalHours }
+        : r
+    ));
+    
+    // Show notification
+    if (isRecurring) {
+      toast.success(`${routine.songTitle} scheduled recurring for ${scheduledRoutinesToCreate.length} week(s).`, {
+        duration: 4000,
+      });
+    } else {
       // Show notification if routine has reached 6 scheduled times
       if (newCount === 6) {
         toast.success(`${routine.songTitle} has been scheduled 6 times and is now maxed out.`, {
@@ -373,10 +522,20 @@ export default function Home() {
           icon: '🔔',
         });
       }
-      
-      console.log('Routine added to schedule (not saved yet)');
     }
-  }, [scheduledRoutines, checkConflicts, rooms]);
+    
+    // Close modal and clear pending state
+    setShowScheduleOptionsModal(false);
+    setPendingScheduleRoutine(null);
+    setPendingScheduleTimeSlot(null);
+    setHasUnsavedChanges(true);
+  }, [pendingScheduleRoutine, pendingScheduleTimeSlot, scheduledRoutines, rooms, checkConflicts]);
+
+  const handleCancelSchedule = useCallback(() => {
+    setShowScheduleOptionsModal(false);
+    setPendingScheduleRoutine(null);
+    setPendingScheduleTimeSlot(null);
+  }, []);
 
   const handleMoveRoutine = useCallback((routine: ScheduledRoutine, newTimeSlot: { hour: number; minute: number; day: number; roomId: string; date: string }) => {
     const updatedRoutine: ScheduledRoutine = {
@@ -917,7 +1076,15 @@ export default function Home() {
   if (isLoading) {
     return (
       <div className="h-screen bg-gray-100 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
+        <div className="flex flex-col items-center gap-6">
+          <Image
+            src="/RehearsalHub.webp"
+            alt="RehearsalHub Logo"
+            width={300}
+            height={120}
+            className="object-contain"
+            priority
+          />
           <Loader2 className="w-12 h-12 text-blue-600 animate-spin" />
           <p className="text-gray-600 text-lg font-medium">Loading schedule data...</p>
         </div>
@@ -928,8 +1095,16 @@ export default function Home() {
   return (
     <DndProvider backend={HTML5Backend}>
       <div className="h-screen bg-gray-100 flex overflow-hidden">
-        {(isSavingRoutine || isSavingSchedule) && (
-          <LoadingOverlay message={isSavingRoutine ? 'Saving routine...' : 'Saving schedule...'} />
+        {(isSavingRoutine || isSavingSchedule || isTogglingInactive) && (
+          <LoadingOverlay 
+            message={
+              isSavingRoutine 
+                ? 'Saving routine...' 
+                : isSavingSchedule 
+                ? 'Saving schedule...' 
+                : 'Updating routine status...'
+            } 
+          />
         )}
         {/* Left Sidebar - Routines */}
         <div className="flex-shrink-0">
@@ -938,6 +1113,31 @@ export default function Home() {
             scheduledRoutines={scheduledRoutines}
             onRoutineClick={handleRoutineClick}
             onAddRoutine={handleAddRoutine}
+            onToggleInactive={handleToggleRoutineInactive}
+            onTeachersChange={(updatedTeachers) => {
+              setTeachers(updatedTeachers as Teacher[]);
+              // Reload routines to reflect teacher changes
+              fetch('/api/routines')
+                .then(res => res.json())
+                .then(data => setRoutines(data))
+                .catch(console.error);
+            }}
+            onGenresChange={(updatedGenres) => {
+              setGenres(updatedGenres as Genre[]);
+              // Reload routines to reflect genre changes
+              fetch('/api/routines')
+                .then(res => res.json())
+                .then(data => setRoutines(data))
+                .catch(console.error);
+            }}
+            onLevelsChange={(updatedLevels) => {
+              setLevels(updatedLevels as Level[]);
+              // Reload routines to reflect level changes
+              fetch('/api/routines')
+                .then(res => res.json())
+                .then(data => setRoutines(data))
+                .catch(console.error);
+            }}
           />
         </div>
 
@@ -989,8 +1189,9 @@ export default function Home() {
         <RoutineDetailsModal
           routine={selectedRoutine}
           dancers={dancers}
-          teachers={mockTeachers}
-          genres={mockGenres}
+          teachers={teachers}
+          genres={genres}
+          levels={levels}
           isOpen={showRoutineModal}
           saving={isSavingRoutine}
           onClose={() => {
@@ -999,6 +1200,30 @@ export default function Home() {
           }}
           onSave={handleSaveRoutine}
           onDelete={handleDeleteRoutine}
+          onTeachersChange={(updatedTeachers) => {
+            setTeachers(updatedTeachers);
+            // Reload routines to reflect teacher changes
+            fetch('/api/routines')
+              .then(res => res.json())
+              .then(data => setRoutines(data))
+              .catch(console.error);
+          }}
+          onGenresChange={(updatedGenres) => {
+            setGenres(updatedGenres);
+            // Reload routines to reflect genre changes
+            fetch('/api/routines')
+              .then(res => res.json())
+              .then(data => setRoutines(data))
+              .catch(console.error);
+          }}
+          onLevelsChange={(updatedLevels) => {
+            setLevels(updatedLevels);
+            // Reload routines to reflect level changes
+            fetch('/api/routines')
+              .then(res => res.json())
+              .then(data => setRoutines(data))
+              .catch(console.error);
+          }}
         />
 
         <ConflictWarningModal
@@ -1020,6 +1245,17 @@ export default function Home() {
           onClose={() => setShowExportModal(false)}
           onExport={handleConfirmExport}
         />
+
+        {pendingScheduleRoutine && pendingScheduleTimeSlot && (
+          <ScheduleOptionsModal
+            routine={pendingScheduleRoutine}
+            timeSlot={pendingScheduleTimeSlot}
+            roomName={rooms.find(r => r.id === pendingScheduleTimeSlot.roomId)?.name || 'Studio'}
+            isOpen={showScheduleOptionsModal}
+            onConfirm={handleConfirmSchedule}
+            onCancel={handleCancelSchedule}
+          />
+        )}
 
         <ScheduledDancersModal
           scheduledRoutine={selectedScheduledRoutine}

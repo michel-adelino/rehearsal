@@ -3,26 +3,31 @@
 import React from 'react';
 import { ManageTeachersModal } from '@/app/components/modals/ManageTeachersModal';
 import { ManageGenresModal } from '@/app/components/modals/ManageGenresModal';
+import { ManageLevelsModal } from '@/app/components/modals/ManageLevelsModal';
 
 export default function SettingsPage() {
   const [teachers, setTeachers] = React.useState<{ id: string; name: string; email?: string | null }[]>([]);
   const [genres, setGenres] = React.useState<{ id: string; name: string; color: string }[]>([]);
+  const [levels, setLevels] = React.useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [openTeachers, setOpenTeachers] = React.useState(false);
   const [openGenres, setOpenGenres] = React.useState(false);
+  const [openLevels, setOpenLevels] = React.useState(false);
 
   React.useEffect(() => {
     let mounted = true;
     const load = async () => {
       try {
-        const [tRes, gRes] = await Promise.all([
+        const [tRes, gRes, lRes] = await Promise.all([
           fetch('/api/teachers'),
-          fetch('/api/genres')
+          fetch('/api/genres'),
+          fetch('/api/levels')
         ]);
-        const [tData, gData] = await Promise.all([tRes.json(), gRes.json()]);
+        const [tData, gData, lData] = await Promise.all([tRes.json(), gRes.json(), lRes.json()]);
         if (!mounted) return;
         setTeachers(tData);
         setGenres(gData);
+        setLevels(lData);
       } finally {
         if (mounted) setLoading(false);
       }
@@ -85,6 +90,28 @@ export default function SettingsPage() {
                 )}
               </ul>
             </section>
+
+            <section className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-lg font-medium text-gray-900">Levels</h2>
+                <button
+                  onClick={() => setOpenLevels(true)}
+                  className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                >
+                  Manage
+                </button>
+              </div>
+              <ul className="divide-y divide-gray-200 border border-gray-200 rounded-lg">
+                {levels.map(l => (
+                  <li key={l.id} className="p-3">
+                    <div className="font-medium text-gray-900">{l.name}</div>
+                  </li>
+                ))}
+                {levels.length === 0 && (
+                  <li className="p-4 text-gray-500 text-center">No levels yet.</li>
+                )}
+              </ul>
+            </section>
           </div>
         )}
       </div>
@@ -101,6 +128,13 @@ export default function SettingsPage() {
         genres={genres}
         onClose={() => setOpenGenres(false)}
         onChange={(next) => setGenres(next)}
+      />
+
+      <ManageLevelsModal
+        isOpen={openLevels}
+        levels={levels}
+        onClose={() => setOpenLevels(false)}
+        onChange={(next) => setLevels(next)}
       />
     </div>
   );

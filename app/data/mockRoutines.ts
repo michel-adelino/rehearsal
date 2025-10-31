@@ -1,5 +1,11 @@
-import { Routine, Teacher, Genre } from '../types/routine';
+import { Routine, Teacher, Genre, Level } from '../types/routine';
 import { mockDancers } from './mockDancers';
+
+export const mockLevels: Level[] = [
+  { id: 'level-1', name: 'Beginner' },
+  { id: 'level-2', name: 'Intermediate' },
+  { id: 'level-3', name: 'Advanced' }
+];
 
 export const mockTeachers: Teacher[] = [
   { id: 'teacher-1', name: 'Maria Santos', email: 'maria@studio.com' },
@@ -24,8 +30,8 @@ export const mockRoutines: Routine[] = [
     dancers: [mockDancers[0], mockDancers[2], mockDancers[6], mockDancers[8]],
     teacher: mockTeachers[0],
     genre: mockGenres[0],
+    level: mockLevels[1], // Intermediate
     duration: 60,
-    level: 'Intermediate',
     notes: 'Focus on technique and precision',
     scheduledHours: 0,
     color: '#A78BFA'
@@ -36,8 +42,8 @@ export const mockRoutines: Routine[] = [
     dancers: [mockDancers[1], mockDancers[3], mockDancers[7]],
     teacher: mockTeachers[1],
     genre: mockGenres[1],
+    level: mockLevels[2], // Advanced
     duration: 60,
-    level: 'Advanced',
     notes: 'High energy routine',
     scheduledHours: 0,
     color: '#FB923C'
@@ -48,8 +54,8 @@ export const mockRoutines: Routine[] = [
     dancers: [mockDancers[2], mockDancers[5], mockDancers[9]],
     teacher: mockTeachers[2],
     genre: mockGenres[2],
+    level: mockLevels[0], // Beginner
     duration: 60,
-    level: 'Beginner',
     notes: 'Expressive contemporary piece',
     scheduledHours: 0,
     color: '#14B8A6'
@@ -60,8 +66,8 @@ export const mockRoutines: Routine[] = [
     dancers: [mockDancers[4], mockDancers[6], mockDancers[9]],
     teacher: mockTeachers[3],
     genre: mockGenres[3],
+    level: mockLevels[1], // Intermediate
     duration: 60,
-    level: 'Intermediate',
     notes: 'Smooth jazz with modern elements',
     scheduledHours: 0,
     color: '#F472B6'
@@ -72,8 +78,8 @@ export const mockRoutines: Routine[] = [
     dancers: [mockDancers[4], mockDancers[8]],
     teacher: mockTeachers[0],
     genre: mockGenres[4],
+    level: mockLevels[2], // Advanced
     duration: 60,
-    level: 'Advanced',
     notes: 'Fast-paced tap routine',
     scheduledHours: 0,
     color: '#FBBF24'
@@ -84,8 +90,8 @@ export const mockRoutines: Routine[] = [
     dancers: [mockDancers[0], mockDancers[5], mockDancers[6]],
     teacher: mockTeachers[2],
     genre: mockGenres[5],
+    level: mockLevels[1], // Intermediate
     duration: 60,
-    level: 'Intermediate',
     notes: 'Abstract modern dance',
     scheduledHours: 0,
     color: '#8B5CF6'
@@ -96,8 +102,8 @@ export const mockRoutines: Routine[] = [
     dancers: [mockDancers[1], mockDancers[3], mockDancers[7]],
     teacher: mockTeachers[1],
     genre: mockGenres[1],
+    level: mockLevels[0], // Beginner
     duration: 60,
-    level: 'Beginner',
     notes: 'Urban street dance style',
     scheduledHours: 0,
     color: '#FB923C'
@@ -108,8 +114,8 @@ export const mockRoutines: Routine[] = [
     dancers: [mockDancers[0], mockDancers[2], mockDancers[8]],
     teacher: mockTeachers[0],
     genre: mockGenres[0],
+    level: mockLevels[2], // Advanced
     duration: 120,
-    level: 'Advanced',
     notes: 'Traditional ballet variations',
     scheduledHours: 0,
     color: '#A78BFA'

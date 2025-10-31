@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Dancer } from '../../types/dancer';
 import { ScheduledRoutine } from '../../types/schedule';
-import { X, Mail, Download, Copy, Check, Search } from 'lucide-react';
+import { Level } from '../../types/routine';
+import { X, Mail, Download, Copy, Check, Search, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { formatTime, getDayName } from '../../utils/timeUtils';
 import { toast } from 'react-hot-toast';
 
@@ -28,8 +29,27 @@ export const EmailScheduleModal: React.FC<EmailScheduleModalProps> = ({
   const [from, setFrom] = useState<string>('');
   const [to, setTo] = useState<string>('');
   const [isSending, setIsSending] = useState(false);
-
+  const [levels, setLevels] = useState<Level[]>([]);
+  const [selectedLevelIds, setSelectedLevelIds] = useState<string[]>([]);
   
+  // Sorting state
+  type SortField = 'firstName' | 'lastName' | 'age' | 'email' | 'phone' | 'name';
+  type SortDirection = 'asc' | 'desc';
+  const [sortField, setSortField] = useState<SortField | null>(null);
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+
+  useEffect(() => {
+    const loadLevels = async () => {
+      try {
+        const res = await fetch('/api/levels');
+        const data = await res.json();
+        setLevels(data);
+      } catch (e) {
+        console.error('Failed to load levels', e);
+      }
+    };
+    loadLevels();
+  }, []);
 
   const selectedDancerData = selectedDancers.length === 1 ? dancers.find(d => d.id === selectedDancers[0]) : undefined;
   
@@ -102,6 +122,7 @@ Sincerely, Performing Dance Arts.
     preset?: Exclude<Preset, 'custom'>;
     from?: string;
     to?: string;
+    levelIds?: string[];
   }
 
   const handleSendEmail = async () => {
@@ -109,6 +130,9 @@ Sincerely, Performing Dance Arts.
     try {
       setIsSending(true);
       const payload: PostBody = { dancerIds: selectedDancers };
+      if (selectedLevelIds.length > 0) {
+        payload.levelIds = selectedLevelIds;
+      }
       if (preset === 'this_week' || preset === 'this_month') {
         payload.preset = preset === 'this_week' ? 'this_week' : 'this_month';
       } else if (preset === 'next_week') {
@@ -132,10 +156,20 @@ Sincerely, Performing Dance Arts.
         const data = await res.json().catch(() => ({}));
         throw new Error(data?.message || 'Failed to send');
       }
-      const data = (await res.json().catch(() => ({}))) as { results?: { id: string; status: 'sent' | 'skipped'; reason?: string }[] };
+      const data = (await res.json().catch(() => ({}))) as { 
+        results?: { id: string; status: 'sent' | 'skipped'; reason?: string }[];
+        teacherResults?: { teacherId: string; status: 'sent' | 'skipped'; reason?: string }[];
+      };
       const sent = (data?.results || []).filter((r) => r.status === 'sent').length;
       const skipped = (data?.results || []).length - sent;
-      toast.success(`Emails sent: ${sent}${skipped ? `, skipped: ${skipped}` : ''}`);
+      const teacherSent = (data?.teacherResults || []).filter((r) => r.status === 'sent').length;
+      const teacherSkipped = (data?.teacherResults || []).length - teacherSent;
+      
+      let message = `Emails sent: ${sent}${skipped ? `, skipped: ${skipped}` : ''}`;
+      if (teacherSent > 0 || teacherSkipped > 0) {
+        message += ` | Teachers: ${teacherSent}${teacherSkipped ? `, skipped: ${teacherSkipped}` : ''}`;
+      }
+      toast.success(message);
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Failed to send email';
       toast.error(message);
@@ -189,30 +223,154 @@ Sincerely, Performing Dance Arts.
 
   const canSend = useMemo(() => selectedDancers.length > 0 && !isSending, [selectedDancers.length, isSending]);
 
-  const filteredDancers = useMemo(() => {
-    if (!searchQuery.trim()) {
-      return dancers;
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
     }
-    const query = searchQuery.toLowerCase().trim();
-    return dancers.filter(dancer => 
-      dancer.name.toLowerCase().includes(query) ||
-      (dancer.email && (
-        Array.isArray(dancer.email) 
-          ? dancer.email.some(e => e.toLowerCase().includes(query))
-          : dancer.email.toLowerCase().includes(query)
-      ))
-    );
-  }, [dancers, searchQuery]);
+  };
+
+  const getLevelColorClasses = (level?: string) => {
+    if (!level) return 'bg-gray-100 text-gray-700';
+    
+    const levelLower = level.toLowerCase();
+    
+    // Map common level names to colors
+    if (levelLower.includes('beginner') || levelLower.includes('basic') || levelLower.includes('entry')) {
+      return 'bg-green-100 text-green-800';
+    } else if (levelLower.includes('intermediate') || levelLower.includes('medium')) {
+      return 'bg-yellow-100 text-yellow-800';
+    } else if (levelLower.includes('advanced') || levelLower.includes('expert') || levelLower.includes('professional')) {
+      return 'bg-red-100 text-red-800';
+    } else if (levelLower.includes('pre-') || levelLower.includes('junior')) {
+      return 'bg-blue-100 text-blue-800';
+    } else if (levelLower.includes('senior')) {
+      return 'bg-purple-100 text-purple-800';
+    }
+    
+    // Default color for unknown levels
+    return 'bg-gray-100 text-gray-700';
+  };
+
+  const getSortIcon = (field: SortField) => {
+    if (sortField !== field) {
+      return <ArrowUpDown className="w-3 h-3 ml-1 inline" />;
+    }
+    return sortDirection === 'asc' 
+      ? <ArrowUp className="w-3 h-3 ml-1 inline" />
+      : <ArrowDown className="w-3 h-3 ml-1 inline" />;
+  };
+
+  const SortableHeader = ({ field, children }: { field: SortField; children: React.ReactNode }) => (
+    <th
+      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+      onClick={() => handleSort(field)}
+    >
+      <span className="flex items-center">
+        {children}
+        {getSortIcon(field)}
+      </span>
+    </th>
+  );
+
+  const filteredAndSortedDancers = useMemo(() => {
+    // Filter by search query
+    const filtered = dancers.filter(dancer => {
+      const matchesSearch = !searchQuery.trim() || 
+        dancer.firstName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        dancer.lastName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        dancer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (dancer.email && (
+          Array.isArray(dancer.email)
+            ? dancer.email.some(e => e.toLowerCase().includes(searchQuery.toLowerCase()))
+            : dancer.email.toLowerCase().includes(searchQuery.toLowerCase())
+        )) ||
+        (dancer.phone && dancer.phone.toLowerCase().includes(searchQuery.toLowerCase()));
+      
+      // Filter by level - match dancer's level with selected level names
+      const matchesLevel = selectedLevelIds.length === 0 || (() => {
+        // Get the names of selected levels
+        const selectedLevelNames = levels
+          .filter(level => selectedLevelIds.includes(level.id))
+          .map(level => level.name.toLowerCase());
+        
+        if (selectedLevelNames.length === 0) return true;
+        
+        // Check if dancer's level matches any selected level name
+        if (!dancer.level) return false;
+        
+        const dancerLevelLower = dancer.level.toLowerCase();
+        return selectedLevelNames.some(selectedName => 
+          dancerLevelLower === selectedName ||
+          dancerLevelLower.includes(selectedName) ||
+          selectedName.includes(dancerLevelLower)
+        );
+      })();
+      
+      return matchesSearch && matchesLevel;
+    });
+
+    // Sort if sortField is set
+    if (sortField) {
+      filtered.sort((a, b) => {
+        let aVal: string | number = '';
+        let bVal: string | number = '';
+
+        switch (sortField) {
+          case 'firstName':
+            aVal = a.firstName || a.name.split(' ')[0] || '';
+            bVal = b.firstName || b.name.split(' ')[0] || '';
+            break;
+          case 'lastName':
+            aVal = a.lastName || a.name.split(' ').slice(1).join(' ') || '';
+            bVal = b.lastName || b.name.split(' ').slice(1).join(' ') || '';
+            break;
+          case 'age':
+            aVal = a.age ?? 0;
+            bVal = b.age ?? 0;
+            break;
+          case 'email':
+            aVal = a.email 
+              ? (Array.isArray(a.email) ? a.email.join('; ') : a.email)
+              : '';
+            bVal = b.email 
+              ? (Array.isArray(b.email) ? b.email.join('; ') : b.email)
+              : '';
+            break;
+          case 'phone':
+            aVal = a.phone || '';
+            bVal = b.phone || '';
+            break;
+          case 'name':
+            aVal = a.name;
+            bVal = b.name;
+            break;
+        }
+
+        if (sortField === 'age') {
+          const comparison = (aVal as number) - (bVal as number);
+          return sortDirection === 'asc' ? comparison : -comparison;
+        } else {
+          const comparison = String(aVal).localeCompare(String(bVal));
+          return sortDirection === 'asc' ? comparison : -comparison;
+        }
+      });
+    }
+
+    return filtered;
+  }, [dancers, searchQuery, selectedLevelIds, levels, sortField, sortDirection]);
 
   const selectedFilteredDancers = useMemo(() => {
-    return filteredDancers.filter(d => selectedDancers.includes(d.id));
-  }, [filteredDancers, selectedDancers]);
+    return filteredAndSortedDancers.filter(d => selectedDancers.includes(d.id));
+  }, [filteredAndSortedDancers, selectedDancers]);
 
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <div className="flex items-center gap-3">
@@ -232,87 +390,206 @@ Sincerely, Performing Dance Arts.
           </button>
         </div>
 
-        {/* Content */}
-        <div className="p-6 overflow-y-auto max-h-[calc(90vh-200px)]">
-          <div className="space-y-6">
-            {/* Dancer Selection */}
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <label className="block text-sm font-medium text-gray-700">
-                  Select Dancers
+        {/* Filters */}
+        <div className="p-4 border-b border-gray-200 bg-gray-50">
+          <div className="grid grid-cols-1 gap-4 mb-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Search by name, email, or phone..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+            {levels.length > 0 && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Filter by Level
                 </label>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const allFilteredIds = filteredDancers.map(d => d.id);
-                    const allSelected = allFilteredIds.every(id => selectedDancers.includes(id));
-                    if (allSelected) {
-                      // Deselect all filtered dancers
-                      setSelectedDancers(selectedDancers.filter(id => !allFilteredIds.includes(id)));
-                    } else {
-                      // Select all filtered dancers (without duplicates)
-                      const newSelection = Array.from(new Set([...selectedDancers, ...allFilteredIds]));
-                      setSelectedDancers(newSelection);
-                    }
-                  }}
-                  className="text-sm text-blue-600 hover:text-blue-700 font-medium"
-                >
-                  {selectedFilteredDancers.length === filteredDancers.length && filteredDancers.length > 0
-                    ? 'Deselect All'
-                    : 'Select All'}
-                </button>
-              </div>
-              {/* Search Input */}
-              <div className="relative mb-3">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Search dancers by name or email..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              <div className="border border-gray-300 rounded-lg p-3 max-h-48 overflow-y-auto bg-gray-50">
-                {filteredDancers.length === 0 ? (
-                  <div className="text-center py-4 text-gray-500 text-sm">
-                    No dancers found matching &quot;{searchQuery}&quot;
-                  </div>
-                ) : (
+                <div className="border border-gray-300 rounded-lg p-3 max-h-48 overflow-y-auto bg-white">
                   <div className="space-y-2">
-                    {filteredDancers.map(dancer => (
-                    <label
-                      key={dancer.id}
-                      className="flex items-center gap-2 p-2 hover:bg-white rounded cursor-pointer transition-colors"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedDancers.includes(dancer.id)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedDancers([...selectedDancers, dancer.id]);
-                          } else {
-                            setSelectedDancers(selectedDancers.filter(id => id !== dancer.id));
-                          }
-                        }}
-                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                      />
-                      <span className="text-sm text-gray-700">{dancer.name}</span>
-                      {dancer.email && (
-                        <span className="text-xs text-gray-500 ml-auto">
-                          ({Array.isArray(dancer.email) ? dancer.email.join('; ') : dancer.email})
-                        </span>
-                      )}
-                    </label>
+                    {levels.map(level => (
+                      <label
+                        key={level.id}
+                        className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded cursor-pointer transition-colors"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedLevelIds.includes(level.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedLevelIds([...selectedLevelIds, level.id]);
+                            } else {
+                              setSelectedLevelIds(selectedLevelIds.filter(id => id !== level.id));
+                            }
+                          }}
+                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                        />
+                        <span className="text-sm text-gray-700">{level.name}</span>
+                      </label>
                     ))}
                   </div>
-                )}
-              </div>
-              {searchQuery && (
-                <div className="mt-2 text-xs text-gray-500">
-                  Showing {filteredDancers.length} of {dancers.length} dancers
+                  {selectedLevelIds.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedLevelIds([])}
+                      className="mt-2 text-xs text-blue-600 hover:text-blue-700 font-medium"
+                    >
+                      Uncheck All
+                    </button>
+                  )}
                 </div>
-              )}
+              </div>
+            )}
+          </div>
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-gray-600">
+              Showing {filteredAndSortedDancers.length} of {dancers.length} dancers
+              {selectedDancers.length > 0 && ` (${selectedDancers.length} selected)`}
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const allFilteredIds = filteredAndSortedDancers.map(d => d.id);
+                const allSelected = allFilteredIds.every(id => selectedDancers.includes(id));
+                if (allSelected) {
+                  setSelectedDancers(selectedDancers.filter(id => !allFilteredIds.includes(id)));
+                } else {
+                  const newSelection = Array.from(new Set([...selectedDancers, ...allFilteredIds]));
+                  setSelectedDancers(newSelection);
+                }
+              }}
+              className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+            >
+              {selectedFilteredDancers.length === filteredAndSortedDancers.length && filteredAndSortedDancers.length > 0
+                ? 'Deselect All'
+                : 'Select All'}
+            </button>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-auto p-6">
+          <div className="space-y-6">
+            {/* Dancer Selection Table */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-3">
+                Select Dancers
+              </label>
+              <div className="border border-gray-300 rounded-lg overflow-hidden">
+                <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50 sticky top-0">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-12">
+                          <input
+                            type="checkbox"
+                            checked={filteredAndSortedDancers.length > 0 && filteredAndSortedDancers.every(d => selectedDancers.includes(d.id))}
+                            onChange={(e) => {
+                              const allFilteredIds = filteredAndSortedDancers.map(d => d.id);
+                              if (e.target.checked) {
+                                setSelectedDancers(Array.from(new Set([...selectedDancers, ...allFilteredIds])));
+                              } else {
+                                setSelectedDancers(selectedDancers.filter(id => !allFilteredIds.includes(id)));
+                              }
+                            }}
+                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                        </th>
+                        <SortableHeader field="firstName">First Name</SortableHeader>
+                        <SortableHeader field="lastName">Last Name</SortableHeader>
+                        <SortableHeader field="name">Full Name</SortableHeader>
+                        <SortableHeader field="age">Age</SortableHeader>
+                        <SortableHeader field="email">Email</SortableHeader>
+                        <SortableHeader field="phone">Phone</SortableHeader>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Gender
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Level
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {filteredAndSortedDancers.length === 0 ? (
+                        <tr>
+                          <td colSpan={9} className="px-4 py-8 text-center text-gray-500 text-sm">
+                            No dancers found matching your search criteria.
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredAndSortedDancers.map(dancer => {
+                          const isSelected = selectedDancers.includes(dancer.id);
+                          return (
+                            <tr
+                              key={dancer.id}
+                              className={`hover:bg-gray-50 cursor-pointer ${isSelected ? 'bg-blue-50' : ''}`}
+                              onClick={() => {
+                                if (isSelected) {
+                                  setSelectedDancers(selectedDancers.filter(id => id !== dancer.id));
+                                } else {
+                                  setSelectedDancers([...selectedDancers, dancer.id]);
+                                }
+                              }}
+                            >
+                              <td className="px-4 py-3 whitespace-nowrap">
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={(e) => {
+                                    e.stopPropagation();
+                                    if (e.target.checked) {
+                                      setSelectedDancers([...selectedDancers, dancer.id]);
+                                    } else {
+                                      setSelectedDancers(selectedDancers.filter(id => id !== dancer.id));
+                                    }
+                                  }}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                />
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                                {dancer.firstName || dancer.name.split(' ')[0] || '-'}
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                                {dancer.lastName || dancer.name.split(' ').slice(1).join(' ') || '-'}
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+                                {dancer.name}
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                                {dancer.age ?? '-'}
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                                {dancer.email 
+                                  ? (Array.isArray(dancer.email) ? dancer.email.join('; ') : dancer.email)
+                                  : '-'}
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                                {dancer.phone || '-'}
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                                {dancer.gender || '-'}
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                                {dancer.level ? (
+                                  <span className={`px-2 py-1 rounded text-xs font-medium capitalize ${getLevelColorClasses(dancer.level)}`}>
+                                    {dancer.level}
+                                  </span>
+                                ) : (
+                                  '-'
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
 
             {/* Date Range */}
