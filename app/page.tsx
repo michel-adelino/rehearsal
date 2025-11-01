@@ -266,15 +266,18 @@ export default function Home() {
       // Extract dancer IDs
       const dancerIds = updatedRoutine.dancers?.map(d => d.id) || [];
       
-      // Determine if this is a new routine
-      // Temporary IDs always start with 'routine-' and indicate a new routine
-      // Database IDs are CUIDs (never start with 'routine-')
-      const hasTempId = updatedRoutine.id.startsWith('routine-');
-      const isNewRoutine = hasTempId;
+      // Determine if this is a new routine by checking if it exists in the routines state
+      // Seed routines have IDs like "routine-1", "routine-2" etc. which are actual database IDs
+      // New temporary routines have IDs like "routine-{timestamp}" and are NOT in the state yet
+      // Database-generated IDs are CUIDs (like "cmhgrbtoq000luu60mwfnd4jo")
+      // If the routine exists in state by ID, it's an UPDATE, not a new routine
+      const routineExistsInState = routines.some(r => r.id === updatedRoutine.id);
+      const isNewRoutine = !routineExistsInState;
       
       console.log('Saving routine:', {
-        isNewRoutine,
         id: updatedRoutine.id,
+        routineExistsInState,
+        isNewRoutine,
         songTitle: updatedRoutine.songTitle
       });
       
@@ -329,14 +332,8 @@ export default function Home() {
       // Update both routines and scheduledRoutines together
       // Get current state to check for existing routine and preserve scheduledHours
       setRoutines(prev => {
-        // For updates: check if routine exists by saved.id (the real database ID)
-        // For new routines: check if it exists by the temp ID or the saved.id
-        const existingRoutine = prev.find(r => 
-          r.id === saved.id || (!isNewRoutine && r.id === updatedRoutine.id)
-        );
-        
         if (isNewRoutine) {
-          // Remove temp routine (if it exists) and add saved one with scheduledHours set to 0
+          // For new routines: remove temp routine (if it exists) and add saved one with scheduledHours set to 0
           // Also check if saved.id already exists to avoid duplicates
           const filtered = prev.filter(r => r.id !== updatedRoutine.id && r.id !== saved.id);
           
@@ -350,7 +347,28 @@ export default function Home() {
         }
         
         // For updates: find and update existing routine
+        // Check if routine exists by saved.id (the real database ID) or original updated id
+        const existingRoutine = prev.find(r => 
+          r.id === saved.id || r.id === updatedRoutine.id
+        );
+        
         if (!existingRoutine) {
+          // If routine not found by saved.id or original id, check if it exists with saved.id
+          const foundBySavedId = prev.find(r => r.id === saved.id);
+          if (foundBySavedId) {
+            // Update the existing routine found by saved.id
+            console.log(`[UPDATE] Updating routine ${saved.id} found by saved ID, preserving scheduledHours: ${foundBySavedId.scheduledHours}`);
+            return prev.map(r => {
+              if (r.id === saved.id) {
+                return { 
+                  ...saved, 
+                  scheduledHours: r.scheduledHours || 0 
+                };
+              }
+              return r;
+            });
+          }
+          
           console.error(`[UPDATE] Routine with id ${saved.id} not found in state. Original ID: ${updatedRoutine.id}`);
           console.error('Current routine IDs:', prev.map(r => ({ id: r.id, songTitle: r.songTitle })));
           // CRITICAL: Don't add duplicate - return current state unchanged
@@ -364,7 +382,7 @@ export default function Home() {
         // Use map to update in place - ensure we update by both saved.id and original id
         return prev.map(r => {
           // Update if it matches either the saved ID or the original updated ID
-          if (r.id === saved.id || (!isNewRoutine && r.id === updatedRoutine.id)) {
+          if (r.id === saved.id || r.id === updatedRoutine.id) {
             return { 
               ...saved, 
               scheduledHours: r.scheduledHours || 0 
@@ -416,7 +434,7 @@ export default function Home() {
     } finally {
       setIsSavingRoutine(false);
     }
-  }, []);
+  }, [routines]);
 
   const handleDeleteRoutine = useCallback((routineId: string) => {
     setRoutines(prev => prev.filter(r => r.id !== routineId));
