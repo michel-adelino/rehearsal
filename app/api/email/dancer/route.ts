@@ -10,17 +10,19 @@ interface SendEmailRequestBody {
   levelIds?: string[];
 }
 
-// Helper to parse YYYY-MM-DD to local Date (midnight local time)
-function parseLocalDate(dateString: string): Date {
+// Helper to parse YYYY-MM-DD to UTC Date (midnight UTC)
+// This ensures dates are stored consistently regardless of server timezone
+function parseDateString(dateString: string): Date {
   const [year, month, day] = dateString.split('-').map(Number);
-  return new Date(year, month - 1, day, 0, 0, 0, 0);
+  return new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
 }
 
-// Helper to format Date to YYYY-MM-DD string
-function formatLocalDate(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
+// Helper to format Date to YYYY-MM-DD string (using UTC components)
+// This ensures we get the calendar date, not affected by timezone
+function formatDateString(date: Date): string {
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 }
 
@@ -180,12 +182,11 @@ export async function POST(req: NextRequest) {
       rangeLabel = preset === 'this_week' ? 'this week' : preset === 'next_week' ? 'next week' : 'this month';
     } else if (from || to) {
       if (from) {
-        fromDate = parseLocalDate(from);
+        fromDate = parseDateString(from);
       }
       if (to) {
-        const toLocal = parseLocalDate(to);
-        toLocal.setHours(23, 59, 59, 999);
-        toDate = toLocal;
+        const [year, month, day] = to.split('-').map(Number);
+        toDate = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
       }
       rangeLabel = `${from || ''}${from && to ? ' to ' : ''}${to || ''}` || 'selected dates';
     } else {
@@ -252,11 +253,11 @@ export async function POST(req: NextRequest) {
         routine: { songTitle: string; teacher: { name: string } };
         room: { name: string };
       }) => {
-        // Convert Date from database to local date string, then parse back to local Date
-        // This ensures we work with the actual calendar date, not UTC time
+        // Extract calendar date from UTC date stored in database
+        // Database stores dates as UTC, so we use UTC components to get the calendar date
         const dateObj = it.date instanceof Date ? it.date : new Date(it.date);
-        const dateString = formatLocalDate(dateObj);
-        const normalizedDate = parseLocalDate(dateString);
+        const dateString = formatDateString(dateObj);
+        const normalizedDate = parseDateString(dateString);
         
         return {
           date: normalizedDate,
@@ -380,11 +381,11 @@ export async function POST(req: NextRequest) {
           routine: { songTitle: string; dancers: Array<{ name: string }> };
           room: { name: string };
         }) => {
-          // Convert Date from database to local date string, then parse back to local Date
-          // This ensures we work with the actual calendar date, not UTC time
+          // Extract calendar date from UTC date stored in database
+          // Database stores dates as UTC, so we use UTC components to get the calendar date
           const dateObj = it.date instanceof Date ? it.date : new Date(it.date);
-          const dateString = formatLocalDate(dateObj);
-          const normalizedDate = parseLocalDate(dateString);
+          const dateString = formatDateString(dateObj);
+          const normalizedDate = parseDateString(dateString);
           
           return {
             date: normalizedDate,

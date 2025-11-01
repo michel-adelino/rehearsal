@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/app/lib/prisma';
 import { Prisma } from '@prisma/client';
 
-// Helper to parse YYYY-MM-DD to local Date (midnight local time)
-function parseLocalDate(dateString: string): Date {
+// Helper to parse YYYY-MM-DD to UTC Date (midnight UTC)
+// This ensures dates are stored consistently regardless of server timezone
+function parseDateString(dateString: string): Date {
   const [year, month, day] = dateString.split('-').map(Number);
-  return new Date(year, month - 1, day, 0, 0, 0, 0);
+  return new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
 }
 
 export async function GET(req: NextRequest) {
@@ -17,12 +18,11 @@ export async function GET(req: NextRequest) {
   if (from || to) {
     where.date = {};
     if (from) {
-      where.date.gte = parseLocalDate(from);
+      where.date.gte = parseDateString(from);
     }
     if (to) {
-      const toDate = parseLocalDate(to);
-      toDate.setHours(23, 59, 59, 999);
-      where.date.lte = toDate;
+      const [year, month, day] = to.split('-').map(Number);
+      where.date.lte = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
     }
   }
 
@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
   try {
     const created = await prisma.scheduledRoutine.create({
       data: {
-        date: parseLocalDate(date),
+        date: parseDateString(date),
         startMinutes,
         duration,
         routineId,

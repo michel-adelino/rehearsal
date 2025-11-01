@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/app/lib/prisma';
 import { Prisma } from '@prisma/client';
 
-// Helper to parse YYYY-MM-DD to local Date (midnight local time)
-function parseLocalDate(dateString: string): Date {
+// Helper to parse YYYY-MM-DD to UTC Date (midnight UTC)
+// This ensures dates are stored consistently regardless of server timezone
+function parseDateString(dateString: string): Date {
   const [year, month, day] = dateString.split('-').map(Number);
-  return new Date(year, month - 1, day, 0, 0, 0, 0);
+  return new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
 }
 
 export async function PATCH(
@@ -19,7 +20,7 @@ export async function PATCH(
     const updated = await prisma.scheduledRoutine.update({
       where: { id: params.id },
       data: {
-        ...(date ? { date: parseLocalDate(date) } : {}),
+        ...(date ? { date: parseDateString(date) } : {}),
         ...(typeof startMinutes === 'number' ? { startMinutes } : {}),
         ...(typeof duration === 'number' ? { duration } : {}),
         ...(routineId ? { routineId } : {}),

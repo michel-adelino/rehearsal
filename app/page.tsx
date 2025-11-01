@@ -134,15 +134,23 @@ export default function Home() {
           const endHour = Math.floor(endMinutes / 60);
           const endMinute = endMinutes % 60;
           const date = new Date(it.date);
+          // Format date using UTC components to ensure consistent calendar date
+          const year = date.getUTCFullYear();
+          const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+          const day = String(date.getUTCDate()).padStart(2, '0');
+          const dateString = `${year}-${month}-${day}`;
+          // Use UTC components for day of week to avoid timezone shift
+          const dayOfWeek = date.getUTCDay();
+          
           return {
             id: it.id,
             routineId: it.routineId,
             routine: it.routine,
             roomId: it.roomId,
-            startTime: { hour: startHour, minute: startMinute, day: date.getDay() },
-            endTime: { hour: endHour, minute: endMinute, day: date.getDay() },
+            startTime: { hour: startHour, minute: startMinute, day: dayOfWeek },
+            endTime: { hour: endHour, minute: endMinute, day: dayOfWeek },
             duration: it.duration,
-            date: date.toISOString().split('T')[0]
+            date: dateString
           };
         });
         setScheduledRoutines(mapped);
@@ -830,16 +838,23 @@ export default function Home() {
           const endHour = Math.floor(endMinutes / 60);
           const endMinute = endMinutes % 60;
           const date = new Date(saved.date);
+          // Format date using UTC components to ensure consistent calendar date
+          const year = date.getUTCFullYear();
+          const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+          const day = String(date.getUTCDate()).padStart(2, '0');
+          const dateString = `${year}-${month}-${day}`;
+          // Use UTC components for day of week to avoid timezone shift
+          const dayOfWeek = date.getUTCDay();
           
           const savedScheduledRoutine: ScheduledRoutine = {
             id: saved.id,
             routineId: saved.routineId,
             routine: saved.routine,
             roomId: saved.roomId,
-            startTime: { hour: startHour, minute: startMinute, day: date.getDay() },
-            endTime: { hour: endHour, minute: endMinute, day: date.getDay() },
+            startTime: { hour: startHour, minute: startMinute, day: dayOfWeek },
+            endTime: { hour: endHour, minute: endMinute, day: dayOfWeek },
             duration: saved.duration,
-            date: date.toISOString().split('T')[0]
+            date: dateString
           };
           
           savedNewRoutines.push(savedScheduledRoutine);
@@ -869,16 +884,23 @@ export default function Home() {
           const endHour = Math.floor(endMinutes / 60);
           const endMinute = endMinutes % 60;
           const date = new Date(saved.date);
+          // Format date using UTC components to ensure consistent calendar date
+          const year = date.getUTCFullYear();
+          const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+          const day = String(date.getUTCDate()).padStart(2, '0');
+          const dateString = `${year}-${month}-${day}`;
+          // Use UTC components for day of week to avoid timezone shift
+          const dayOfWeek = date.getUTCDay();
           
           const savedScheduledRoutine: ScheduledRoutine = {
             id: saved.id,
             routineId: saved.routineId,
             routine: saved.routine,
             roomId: saved.roomId,
-            startTime: { hour: startHour, minute: startMinute, day: date.getDay() },
-            endTime: { hour: endHour, minute: endMinute, day: date.getDay() },
+            startTime: { hour: startHour, minute: startMinute, day: dayOfWeek },
+            endTime: { hour: endHour, minute: endMinute, day: dayOfWeek },
             duration: saved.duration,
-            date: date.toISOString().split('T')[0]
+            date: dateString
           };
           
           savedUpdatedRoutines.push(savedScheduledRoutine);
