@@ -18,13 +18,13 @@ model Teacher {
 model Genre {
   id       String    @id @default(cuid())
   name     String
-  color    String
   routines Routine[]
 }
 
 model Level {
   id       String    @id @default(cuid())
   name     String
+  color    String
   routines Routine[]
 }
 

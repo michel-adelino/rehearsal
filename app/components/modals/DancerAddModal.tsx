@@ -24,11 +24,9 @@ export const DancerAddModal: React.FC<DancerAddModalProps> = ({
     gender: '',
     phone: '',
     email: '',
-    classes: [],
-    genres: []
+    classes: []
   });
   const [classesInput, setClassesInput] = useState<string>('');
-  const [genresInput, setGenresInput] = useState<string>('');
   const [emailInput, setEmailInput] = useState<string>('');
 
   const resetForm = () => {
@@ -41,11 +39,9 @@ export const DancerAddModal: React.FC<DancerAddModalProps> = ({
       gender: '',
       phone: '',
       email: '',
-      classes: [],
-      genres: []
+      classes: []
     });
     setClassesInput('');
-    setGenresInput('');
     setEmailInput('');
   };
 
@@ -63,9 +59,8 @@ export const DancerAddModal: React.FC<DancerAddModalProps> = ({
       }
     }
 
-    // Parse classes, genres, and emails from input strings
+    // Parse classes and emails from input strings
     const classes = classesInput.split(',').map(c => c.trim()).filter(c => c.length > 0);
-    const genres = genresInput.split(',').map(g => g.trim()).filter(g => g.length > 0);
     // Parse email - if contains semicolon, make it an array, otherwise a string
     let email: string | string[] | undefined;
     if (emailInput.trim()) {
@@ -87,8 +82,7 @@ export const DancerAddModal: React.FC<DancerAddModalProps> = ({
       gender: newDancer.gender || undefined,
       phone: newDancer.phone || undefined,
       email: email,
-      classes: classes.length > 0 ? classes : undefined,
-      genres: genres.length > 0 ? genres : undefined
+      classes: classes.length > 0 ? classes : undefined
     };
 
     onSave(dancer);
@@ -254,20 +248,6 @@ export const DancerAddModal: React.FC<DancerAddModalProps> = ({
                 onChange={(e) => setClassesInput(e.target.value)}
                 placeholder="Class 1, Class 2, Class 3"
                 rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-
-            {/* Genres */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Genres (comma-separated)
-              </label>
-              <input
-                type="text"
-                value={genresInput}
-                onChange={(e) => setGenresInput(e.target.value)}
-                placeholder="ballet, contemporary, jazz"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>

@@ -8,14 +8,11 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { name, color } = body as { name: string; color: string };
+  const { name } = body as { name: string };
   if (!name || name.trim() === '') {
     return NextResponse.json({ message: 'Name is required' }, { status: 400 });
   }
-  if (!color || color.trim() === '') {
-    return NextResponse.json({ message: 'Color is required' }, { status: 400 });
-  }
-  const genre = await prisma.genre.create({ data: { name: name.trim(), color: color.trim() } });
+  const genre = await prisma.genre.create({ data: { name: name.trim() } });
   return NextResponse.json(genre, { status: 201 });
 }
 

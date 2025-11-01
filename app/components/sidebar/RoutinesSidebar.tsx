@@ -18,8 +18,8 @@ interface RoutinesSidebarProps {
   onAddRoutine: () => void;
   onToggleInactive?: (routine: Routine) => void;
   onTeachersChange?: (teachers: { id: string; name: string; email?: string | null }[]) => void;
-  onGenresChange?: (genres: { id: string; name: string; color: string }[]) => void;
-  onLevelsChange?: (levels: { id: string; name: string }[]) => void;
+  onGenresChange?: (genres: { id: string; name: string }[]) => void;
+  onLevelsChange?: (levels: { id: string; name: string; color: string }[]) => void;
 }
 
 export const RoutinesSidebar: React.FC<RoutinesSidebarProps> = ({
@@ -43,8 +43,8 @@ export const RoutinesSidebar: React.FC<RoutinesSidebarProps> = ({
   const [hideInactive, setHideInactive] = useState(false);
   const [sortOrder, setSortOrder] = useState<'A-Z' | 'Z-A' | 'none'>('A-Z');
   const [teachers, setTeachers] = useState<{ id: string; name: string; email?: string | null }[]>([]);
-  const [genres, setGenres] = useState<{ id: string; name: string; color: string }[]>([]);
-  const [levels, setLevels] = useState<{ id: string; name: string }[]>([]);
+  const [genres, setGenres] = useState<{ id: string; name: string }[]>([]);
+  const [levels, setLevels] = useState<{ id: string; name: string; color: string }[]>([]);
 
   useEffect(() => {
     // Load initial teachers/genres to populate the management modals

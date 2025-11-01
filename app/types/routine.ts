@@ -11,12 +11,12 @@ export interface Teacher {
 export interface Genre {
   id: string;
   name: string;
-  color: string;
 }
 
 export interface Level {
   id: string;
   name: string;
+  color: string;
 }
 
 export interface Routine {

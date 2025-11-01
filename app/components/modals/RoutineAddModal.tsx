@@ -4,13 +4,13 @@ import React, { useState } from 'react';
 import { Routine, Teacher, Genre, Level } from '../../types/routine';
 import { Loader2 } from 'lucide-react';
 import { Dancer } from '../../types/dancer';
-import { X, Save, Trash2, Users, Clock, User, Tag, Plus } from 'lucide-react';
+import { X, Save, Users, Clock, User, Tag, Plus } from 'lucide-react';
 import { DancerSelectionModal } from './DancerSelectionModal';
 import { ManageTeachersModal } from './ManageTeachersModal';
 import { ManageGenresModal } from './ManageGenresModal';
 import { ManageLevelsModal } from './ManageLevelsModal';
 
-interface RoutineDetailsModalProps {
+interface RoutineAddModalProps {
   routine: Routine | null;
   dancers: Dancer[];
   teachers: Teacher[];
@@ -19,14 +19,13 @@ interface RoutineDetailsModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (routine: Routine) => void;
-  onDelete: (routineId: string) => void;
   onTeachersChange?: (teachers: Teacher[]) => void;
   onGenresChange?: (genres: Genre[]) => void;
   onLevelsChange?: (levels: Level[]) => void;
   saving?: boolean;
 }
 
-export const RoutineDetailsModal: React.FC<RoutineDetailsModalProps> = ({
+export const RoutineAddModal: React.FC<RoutineAddModalProps> = ({
   routine,
   dancers,
   teachers,
@@ -35,7 +34,6 @@ export const RoutineDetailsModal: React.FC<RoutineDetailsModalProps> = ({
   isOpen,
   onClose,
   onSave,
-  onDelete,
   onTeachersChange,
   onGenresChange,
   onLevelsChange,
@@ -67,13 +65,6 @@ export const RoutineDetailsModal: React.FC<RoutineDetailsModalProps> = ({
 
   const handleSave = () => {
     onSave(editedRoutine);
-  };
-
-  const handleDelete = () => {
-    if (window.confirm('Are you sure you want to delete this routine?')) {
-      onDelete(editedRoutine.id);
-      onClose();
-    }
   };
 
   const handleDancerSelection = (selectedDancerIds: string[]) => {
@@ -113,7 +104,7 @@ export const RoutineDetailsModal: React.FC<RoutineDetailsModalProps> = ({
       <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-900">Edit Routine</h2>
+          <h2 className="text-xl font-semibold text-gray-900">Add New Routine</h2>
           <button
             onClick={onClose}
             className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
@@ -432,37 +423,26 @@ export const RoutineDetailsModal: React.FC<RoutineDetailsModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between p-6 border-t border-gray-200 bg-gray-50">
+        <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200 bg-gray-50">
           <button
-            onClick={handleDelete}
+            onClick={onClose}
             disabled={saving}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${saving ? 'opacity-60 cursor-not-allowed text-red-300' : 'text-red-600 hover:bg-red-50'}`}
+            className={`px-4 py-2 rounded-lg transition-colors ${saving ? 'opacity-60 cursor-not-allowed bg-gray-100 text-gray-400' : 'text-gray-600 hover:bg-gray-100'}`}
           >
-            <Trash2 className="w-4 h-4" />
-            Delete
+            Cancel
           </button>
-          
-          <div className="flex items-center gap-3">
-            <button
-              onClick={onClose}
-              disabled={saving}
-              className={`px-4 py-2 rounded-lg transition-colors ${saving ? 'opacity-60 cursor-not-allowed bg-gray-100 text-gray-400' : 'text-gray-600 hover:bg-gray-100'}`}
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${saving ? 'bg-blue-400 cursor-wait' : 'bg-blue-600 hover:bg-blue-700'} text-white`}
-            >
-              {saving ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Save className="w-4 h-4" />
-              )}
-              {saving ? 'Saving...' : 'Save Changes'}
-            </button>
-          </div>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${saving ? 'bg-blue-400 cursor-wait' : 'bg-blue-600 hover:bg-blue-700'} text-white`}
+          >
+            {saving ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Save className="w-4 h-4" />
+            )}
+            {saving ? 'Adding...' : 'Add Routine'}
+          </button>
         </div>
       </div>
 
@@ -590,3 +570,4 @@ export const RoutineDetailsModal: React.FC<RoutineDetailsModalProps> = ({
     </div>
   );
 };
+

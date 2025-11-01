@@ -7,8 +7,8 @@ import { ManageLevelsModal } from '@/app/components/modals/ManageLevelsModal';
 
 export default function SettingsPage() {
   const [teachers, setTeachers] = React.useState<{ id: string; name: string; email?: string | null }[]>([]);
-  const [genres, setGenres] = React.useState<{ id: string; name: string; color: string }[]>([]);
-  const [levels, setLevels] = React.useState<{ id: string; name: string }[]>([]);
+  const [genres, setGenres] = React.useState<{ id: string; name: string }[]>([]);
+  const [levels, setLevels] = React.useState<{ id: string; name: string; color: string }[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [openTeachers, setOpenTeachers] = React.useState(false);
   const [openGenres, setOpenGenres] = React.useState(false);
@@ -80,8 +80,7 @@ export default function SettingsPage() {
               </div>
               <ul className="divide-y divide-gray-200 border border-gray-200 rounded-lg">
                 {genres.map(g => (
-                  <li key={g.id} className="p-3 flex items-center gap-3">
-                    <span className="w-5 h-5 rounded" style={{ backgroundColor: g.color }} />
+                  <li key={g.id} className="p-3">
                     <div className="font-medium text-gray-900">{g.name}</div>
                   </li>
                 ))}
@@ -103,7 +102,8 @@ export default function SettingsPage() {
               </div>
               <ul className="divide-y divide-gray-200 border border-gray-200 rounded-lg">
                 {levels.map(l => (
-                  <li key={l.id} className="p-3">
+                  <li key={l.id} className="p-3 flex items-center gap-3">
+                    <span className="w-5 h-5 rounded" style={{ backgroundColor: l.color }} />
                     <div className="font-medium text-gray-900">{l.name}</div>
                   </li>
                 ))}

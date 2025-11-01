@@ -13,6 +13,7 @@ import { CalendarGrid } from './components/calendar/CalendarGrid';
 import { ToolsSidebar } from './components/sidebar/ToolsSidebar';
 import { DancersList } from './components/dancers/DancersList';
 import { RoutineDetailsModal } from './components/modals/RoutineDetailsModal';
+import { RoutineAddModal } from './components/modals/RoutineAddModal';
 import { ConflictWarningModal } from './components/modals/ConflictWarningModal';
 import { EmailScheduleModal } from './components/modals/EmailScheduleModal';
 import { ScheduledDancersModal } from './components/modals/ScheduledDancersModal';
@@ -58,6 +59,7 @@ export default function Home() {
   // Modal states
   const [selectedRoutine, setSelectedRoutine] = useState<Routine | null>(null);
   const [showRoutineModal, setShowRoutineModal] = useState(false);
+  const [showRoutineAddModal, setShowRoutineAddModal] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [selectedScheduledRoutine, setSelectedScheduledRoutine] = useState<ScheduledRoutine | null>(null);
   const [showScheduledDancersModal, setShowScheduledDancersModal] = useState(false);
@@ -241,21 +243,22 @@ export default function Home() {
   }, []);
 
   const handleAddRoutine = useCallback(() => {
+    const defaultLevel = levels.length > 0 ? levels[0] : undefined;
     const newRoutine: Routine = {
       id: `routine-${Date.now()}`,
       songTitle: 'New Routine',
       dancers: [],
-      teacher: mockTeachers[0],
-      genre: mockGenres[0],
+      teacher: teachers.length > 0 ? teachers[0] : mockTeachers[0],
+      genre: genres.length > 0 ? genres[0] : mockGenres[0],
+      level: defaultLevel,
       duration: 60,
       notes: '',
       scheduledHours: 0,
-      color: mockGenres[0].color
+      color: defaultLevel?.color || '#3b82f6'
     };
-    setRoutines(prev => [...prev, newRoutine]);
     setSelectedRoutine(newRoutine);
-    setShowRoutineModal(true);
-  }, []);
+    setShowRoutineAddModal(true);
+  }, [teachers, genres, levels]);
 
   const handleSaveRoutine = useCallback(async (updatedRoutine: Routine) => {
     setIsSavingRoutine(true);
@@ -404,6 +407,7 @@ export default function Home() {
       
       toast.success('Routine saved successfully');
       setShowRoutineModal(false);
+      setShowRoutineAddModal(false);
       setSelectedRoutine(null);
     } catch (e: unknown) {
       console.error('Failed to save routine:', e);
@@ -419,6 +423,7 @@ export default function Home() {
     setScheduledRoutines(prev => prev.filter(sr => sr.routineId !== routineId));
     setShowRoutineModal(false);
     setSelectedRoutine(null);
+    // Note: handleDeleteRoutine is only called from edit modal, not add modal
   }, []);
 
   const handleToggleRoutineInactive = useCallback(async (routine: Routine) => {
@@ -1297,6 +1302,45 @@ export default function Home() {
         </div>
 
         {/* Modals */}
+        <RoutineAddModal
+          routine={selectedRoutine}
+          dancers={dancers}
+          teachers={teachers}
+          genres={genres}
+          levels={levels}
+          isOpen={showRoutineAddModal}
+          saving={isSavingRoutine}
+          onClose={() => {
+            setShowRoutineAddModal(false);
+            setSelectedRoutine(null);
+          }}
+          onSave={handleSaveRoutine}
+          onTeachersChange={(updatedTeachers) => {
+            setTeachers(updatedTeachers);
+            // Reload routines to reflect teacher changes
+            fetch('/api/routines')
+              .then(res => res.json())
+              .then(data => setRoutines(data))
+              .catch(console.error);
+          }}
+          onGenresChange={(updatedGenres) => {
+            setGenres(updatedGenres);
+            // Reload routines to reflect genre changes
+            fetch('/api/routines')
+              .then(res => res.json())
+              .then(data => setRoutines(data))
+              .catch(console.error);
+          }}
+          onLevelsChange={(updatedLevels) => {
+            setLevels(updatedLevels);
+            // Reload routines to reflect level changes
+            fetch('/api/routines')
+              .then(res => res.json())
+              .then(data => setRoutines(data))
+              .catch(console.error);
+          }}
+        />
+
         <RoutineDetailsModal
           routine={selectedRoutine}
           dancers={dancers}

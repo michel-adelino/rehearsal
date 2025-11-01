@@ -5,14 +5,15 @@ import { X, Plus, Trash2, Save, Loader2 } from 'lucide-react';
 
 export interface ManageLevelsModalProps {
   isOpen: boolean;
-  levels: { id: string; name: string }[];
+  levels: { id: string; name: string; color: string }[];
   onClose: () => void;
-  onChange: (next: { id: string; name: string }[]) => void;
+  onChange: (next: { id: string; name: string; color: string }[]) => void;
 }
 
 export const ManageLevelsModal: React.FC<ManageLevelsModalProps> = ({ isOpen, levels, onClose, onChange }) => {
   const [items, setItems] = React.useState(levels);
   const [newName, setNewName] = React.useState('');
+  const [newColor, setNewColor] = React.useState('#888888');
   const [saving, setSaving] = React.useState(false);
   const [loadingId, setLoadingId] = React.useState<string | null>(null);
 
@@ -28,12 +29,13 @@ export const ManageLevelsModal: React.FC<ManageLevelsModalProps> = ({ isOpen, le
   };
 
   const createItem = async () => {
-    if (!newName.trim()) return;
+    if (!newName.trim() || !newColor.trim()) return;
     setSaving(true);
     setLoadingId('create');
     try {
-      await fetch('/api/levels', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: newName.trim() }) });
+      await fetch('/api/levels', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: newName.trim(), color: newColor.trim() }) });
       setNewName('');
+      setNewColor('#888888');
       await refresh();
     } finally {
       setSaving(false);
@@ -41,10 +43,10 @@ export const ManageLevelsModal: React.FC<ManageLevelsModalProps> = ({ isOpen, le
     }
   };
 
-  const updateItem = async (id: string, name: string) => {
+  const updateItem = async (id: string, name: string, color: string) => {
     setLoadingId(id);
     try {
-      await fetch(`/api/levels/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+      await fetch(`/api/levels/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, color }) });
       await refresh();
     } finally {
       setLoadingId(null);
@@ -80,13 +82,20 @@ export const ManageLevelsModal: React.FC<ManageLevelsModalProps> = ({ isOpen, le
         </div>
 
         <div className="p-6 overflow-y-auto flex-1 space-y-4">
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
             <input
               type="text"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               placeholder="Level name"
               className="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+            <input
+              type="color"
+              value={newColor}
+              onChange={(e) => setNewColor(e.target.value)}
+              className="w-14 h-10 border border-gray-300 rounded-lg p-1"
+              title="Pick color"
             />
             <button onClick={createItem} disabled={saving || !newName.trim()} className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center">
               {loadingId === 'create' ? (
@@ -118,23 +127,33 @@ export const ManageLevelsModal: React.FC<ManageLevelsModalProps> = ({ isOpen, le
 };
 
 const LevelRow: React.FC<{
-  level: { id: string; name: string };
-  onSave: (id: string, name: string) => void;
+  level: { id: string; name: string; color: string };
+  onSave: (id: string, name: string, color: string) => void;
   onDelete: (id: string) => void;
   loading: boolean;
   saving: boolean;
 }> = ({ level, onSave, onDelete, loading, saving }) => {
   const [name, setName] = React.useState(level.name);
+  const [color, setColor] = React.useState(level.color);
 
   return (
     <div className="flex items-center gap-2 p-3">
+      <span className="w-6 h-6 rounded" style={{ backgroundColor: color }} />
       <input
         value={name}
         onChange={(e) => setName(e.target.value)}
         disabled={loading}
         className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
       />
-      <button onClick={() => onSave(level.id, name.trim())} disabled={loading || saving || !name.trim()} className="px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 shrink-0 flex items-center justify-center">
+      <input
+        type="color"
+        value={color}
+        onChange={(e) => setColor(e.target.value)}
+        disabled={loading}
+        className="w-14 h-10 border border-gray-300 rounded-lg p-1 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+        title="Pick color"
+      />
+      <button onClick={() => onSave(level.id, name.trim(), color)} disabled={loading || saving || !name.trim()} className="px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 shrink-0 flex items-center justify-center">
         {loading ? (
           <Loader2 className="w-4 h-4 animate-spin" />
         ) : (

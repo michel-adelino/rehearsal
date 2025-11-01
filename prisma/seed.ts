@@ -19,8 +19,8 @@ async function main() {
   for (const g of mockGenres) {
     await prisma.genre.upsert({
       where: { id: g.id },
-      update: { name: g.name, color: g.color },
-      create: { id: g.id, name: g.name, color: g.color },
+      update: { name: g.name },
+      create: { id: g.id, name: g.name },
     });
   }
 
@@ -28,8 +28,8 @@ async function main() {
   for (const l of mockLevels) {
     await prisma.level.upsert({
       where: { id: l.id },
-      update: { name: l.name },
-      create: { id: l.id, name: l.name },
+      update: { name: l.name, color: l.color },
+      create: { id: l.id, name: l.name, color: l.color },
     });
   }
 

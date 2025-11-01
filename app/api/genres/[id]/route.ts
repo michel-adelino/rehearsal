@@ -3,10 +3,9 @@ import { prisma } from '@/app/lib/prisma';
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   const body = await req.json();
-  const { name, color } = body as { name?: string; color?: string };
-  const data: { name?: string; color?: string } = {};
+  const { name } = body as { name?: string };
+  const data: { name?: string } = {};
   if (name !== undefined) data.name = name;
-  if (color !== undefined) data.color = color;
   const updated = await prisma.genre.update({ where: { id: params.id }, data });
   return NextResponse.json(updated);
 }
