@@ -1281,6 +1281,7 @@ export default function Home() {
             <DancersList
               dancers={dancers}
               scheduledRoutines={scheduledRoutines}
+              allRoutines={routines}
               rooms={rooms}
               onClose={() => setShowDancersList(false)}
               onEditDancer={handleEditDancer}
@@ -1409,6 +1410,7 @@ export default function Home() {
         <EmailScheduleModal
           dancers={dancers}
           scheduledRoutines={scheduledRoutines}
+          allRoutines={routines}
           isOpen={showEmailModal}
           onClose={() => setShowEmailModal(false)}
         />

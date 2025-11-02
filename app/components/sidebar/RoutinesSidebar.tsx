@@ -87,6 +87,11 @@ export const RoutinesSidebar: React.FC<RoutinesSidebarProps> = ({
   }, [scheduledRoutines]);
 
   const filteredAndSortedRoutines = useMemo(() => {
+    // Safety check: ensure routines is always an array
+    if (!Array.isArray(routines)) {
+      return [];
+    }
+    
     const filtered = routines.filter(routine => {
       const matchesSearch = routine.songTitle.toLowerCase().includes(searchTerm.toLowerCase()) ||
                            routine.teacher.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -146,9 +151,10 @@ export const RoutinesSidebar: React.FC<RoutinesSidebarProps> = ({
     return routinesToShow;
   }, [routines, searchTerm, selectedGenre, selectedTeacher, selectedLevel, routineScheduledCounts, hideInactive, sortOrder]);
 
-  const uniqueGenres = Array.from(new Set(routines.map(r => r.genre.name)));
-  const uniqueTeachers = Array.from(new Set(routines.map(r => r.teacher.name)));
-  const uniqueLevels = Array.from(new Set(routines.filter(r => r.level).map(r => r.level!.name)));
+  // Safety check: ensure routines is always an array before mapping
+  const uniqueGenres = Array.isArray(routines) ? Array.from(new Set(routines.map(r => r.genre.name))) : [];
+  const uniqueTeachers = Array.isArray(routines) ? Array.from(new Set(routines.map(r => r.teacher.name))) : [];
+  const uniqueLevels = Array.isArray(routines) ? Array.from(new Set(routines.filter(r => r.level).map(r => r.level!.name))) : [];
   
   // Debug logging
   console.log('Available genres:', uniqueGenres);

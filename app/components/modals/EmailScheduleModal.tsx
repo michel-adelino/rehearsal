@@ -1,16 +1,17 @@
 'use client';
 
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { Dancer } from '../../types/dancer';
 import { ScheduledRoutine } from '../../types/schedule';
-import { Level } from '../../types/routine';
-import { X, Mail, Download, Copy, Check, Search, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Level, Routine } from '../../types/routine';
+import { X, Mail, Download, Copy, Check, Search, ArrowUpDown, ArrowUp, ArrowDown, ChevronDown } from 'lucide-react';
 import { formatTime, getDayName } from '../../utils/timeUtils';
 import { toast } from 'react-hot-toast';
 
 interface EmailScheduleModalProps {
   dancers: Dancer[];
   scheduledRoutines: ScheduledRoutine[];
+  allRoutines?: Routine[]; // Optional: all routines (not just scheduled)
   isOpen: boolean;
   onClose: () => void;
 }
@@ -18,6 +19,7 @@ interface EmailScheduleModalProps {
 export const EmailScheduleModal: React.FC<EmailScheduleModalProps> = ({
   dancers,
   scheduledRoutines,
+  allRoutines,
   isOpen,
   onClose
 }) => {
@@ -31,6 +33,7 @@ export const EmailScheduleModal: React.FC<EmailScheduleModalProps> = ({
   const [isSending, setIsSending] = useState(false);
   const [levels, setLevels] = useState<Level[]>([]);
   const [selectedLevelIds, setSelectedLevelIds] = useState<string[]>([]);
+  const [showLevelDropdown, setShowLevelDropdown] = useState(false);
   
   // Sorting state
   type SortField = 'firstName' | 'lastName' | 'age' | 'email' | 'phone' | 'name';
@@ -48,16 +51,21 @@ export const EmailScheduleModal: React.FC<EmailScheduleModalProps> = ({
         console.error('Failed to load levels', e);
       }
     };
-    loadLevels();
-  }, []);
+    
+    // Load levels when modal opens
+    if (isOpen) {
+      loadLevels();
+      
+      // Refresh levels periodically while modal is open (every 2 seconds)
+      const interval = setInterval(() => {
+        loadLevels();
+      }, 2000);
+      
+      return () => clearInterval(interval);
+    }
+  }, [isOpen]);
 
   const selectedDancerData = selectedDancers.length === 1 ? dancers.find(d => d.id === selectedDancers[0]) : undefined;
-  
-  const getDancerSchedule = (dancerId: string) => {
-    return scheduledRoutines.filter(routine =>
-      routine.routine.dancers.some(dancer => dancer.id === dancerId)
-    );
-  };
 
   const formatScheduleText = (dancer: Dancer, routines: ScheduledRoutine[]) => {
     const scheduleText = `
@@ -193,7 +201,7 @@ Sincerely, Performing Dance Arts.
     return `${yyyy}-${mm}-${dd}`;
   };
 
-  const computePresetRange = (p: Preset) => {
+  const computePresetRange = useCallback((p: Preset) => {
     const now = new Date();
     if (p === 'this_week') {
       const start = new Date(now);
@@ -225,7 +233,7 @@ Sincerely, Performing Dance Arts.
       return { f: toISODate(start), t: toISODate(end) };
     }
     return { f: from, t: to };
-  };
+  }, [from, to]);
 
   // Get filtered routines based on date range (matching what the backend sends)
   const routines = useMemo(() => {
@@ -261,7 +269,7 @@ Sincerely, Performing Dance Arts.
       
       return true;
     });
-  }, [selectedDancers, preset, from, to, scheduledRoutines]);
+  }, [selectedDancers, preset, from, to, scheduledRoutines, computePresetRange]);
 
   const canSend = useMemo(() => selectedDancers.length > 0 && !isSending, [selectedDancers.length, isSending]);
 
@@ -311,10 +319,11 @@ Sincerely, Performing Dance Arts.
       
       // Filter by level - check if dancer appears in routines with selected levels
       const matchesLevel = selectedLevelIds.length === 0 || (() => {
+        // Use all routines if provided, otherwise fall back to scheduled routines
+        const routinesToCheck = allRoutines || scheduledRoutines.map(sr => sr.routine);
+        
         // Check if dancer appears in any routine where the routine's level matches selected levels
-        return scheduledRoutines.some(scheduledRoutine => {
-          const routine = scheduledRoutine.routine;
-          
+        return routinesToCheck.some(routine => {
           // Check if routine has a level and it matches any selected level
           if (!routine.level || !routine.level.id) return false;
           if (!selectedLevelIds.includes(routine.level.id)) return false;
@@ -375,7 +384,7 @@ Sincerely, Performing Dance Arts.
     }
 
     return filtered;
-  }, [dancers, searchQuery, selectedLevelIds, scheduledRoutines, sortField, sortDirection]);
+  }, [dancers, searchQuery, selectedLevelIds, scheduledRoutines, allRoutines, sortField, sortDirection]);
 
   const selectedFilteredDancers = useMemo(() => {
     return filteredAndSortedDancers.filter(d => selectedDancers.includes(d.id));
@@ -407,7 +416,7 @@ Sincerely, Performing Dance Arts.
 
         {/* Filters */}
         <div className="p-4 border-b border-gray-200 bg-gray-50">
-          <div className="grid grid-cols-1 gap-4 mb-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 pointer-events-none" />
               <input
@@ -419,43 +428,98 @@ Sincerely, Performing Dance Arts.
               />
             </div>
             {levels.length > 0 && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Filter by Level
-                </label>
-                <div className="border border-gray-300 rounded-lg p-3 max-h-48 overflow-y-auto bg-white">
-                  <div className="space-y-2">
-                    {levels.map(level => (
-                      <label
-                        key={level.id}
-                        className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded cursor-pointer transition-colors"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selectedLevelIds.includes(level.id)}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setSelectedLevelIds([...selectedLevelIds, level.id]);
-                            } else {
-                              setSelectedLevelIds(selectedLevelIds.filter(id => id !== level.id));
-                            }
-                          }}
-                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                        />
-                        <span className="text-sm text-gray-700">{level.name}</span>
-                      </label>
-                    ))}
+              <div className="relative">
+                {/* Level Filter */}
+                <button
+                  type="button"
+                  onClick={() => setShowLevelDropdown(!showLevelDropdown)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-left flex items-center justify-between min-h-[42px]"
+                >
+                  <div className="flex flex-wrap gap-1 flex-1">
+                    {selectedLevelIds.length === 0 ? (
+                      <span className="text-gray-400">All Levels</span>
+                    ) : selectedLevelIds.length <= 2 ? (
+                      selectedLevelIds.map(levelId => {
+                        const level = levels.find(l => l.id === levelId);
+                        return level ? (
+                          <span
+                            key={levelId}
+                            className="inline-flex items-center px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs"
+                          >
+                            {level.name}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedLevelIds(selectedLevelIds.filter(id => id !== levelId));
+                              }}
+                              className="ml-1 hover:text-blue-900"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </span>
+                        ) : null;
+                      }).filter(Boolean)
+                    ) : (
+                      <span className="text-gray-700">
+                        {selectedLevelIds.length} selected
+                      </span>
+                    )}
                   </div>
-                  {selectedLevelIds.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setSelectedLevelIds([])}
-                      className="mt-2 text-xs text-blue-600 hover:text-blue-700 font-medium"
-                    >
-                      Uncheck All
-                    </button>
-                  )}
-                </div>
+                  <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${showLevelDropdown ? 'transform rotate-180' : ''}`} />
+                </button>
+                
+                {showLevelDropdown && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-10"
+                      onClick={() => setShowLevelDropdown(false)}
+                    />
+                    <div className="absolute z-20 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+                      {levels.length === 0 ? (
+                        <div className="p-3 text-sm text-gray-500">No levels available</div>
+                      ) : (
+                        <>
+                          <label className="flex items-center py-2 px-3 hover:bg-gray-50 cursor-pointer border-b border-gray-200 sticky top-0 bg-white">
+                            <input
+                              type="checkbox"
+                              checked={selectedLevelIds.length === levels.length && levels.length > 0}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedLevelIds(levels.map(l => l.id));
+                                } else {
+                                  setSelectedLevelIds([]);
+                                }
+                              }}
+                              className="mr-2 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            <span className="text-sm font-medium text-gray-700">Select All</span>
+                          </label>
+                          {levels.map(level => (
+                            <label
+                              key={level.id}
+                              className="flex items-center py-2 px-3 hover:bg-gray-50 cursor-pointer"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={selectedLevelIds.includes(level.id)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedLevelIds([...selectedLevelIds, level.id]);
+                                  } else {
+                                    setSelectedLevelIds(selectedLevelIds.filter(id => id !== level.id));
+                                  }
+                                }}
+                                className="mr-2 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              />
+                              <span className="text-sm text-gray-700">{level.name}</span>
+                            </label>
+                          ))}
+                        </>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -493,7 +557,7 @@ Sincerely, Performing Dance Arts.
               <label className="block text-sm font-medium text-gray-700 mb-3">
                 Select Dancers
               </label>
-              <div className="border border-gray-300 rounded-lg overflow-hidden">
+              <div className="border border-gray-300 rounded-lg h-[400px] overflow-hidden">
                 <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50 sticky top-0">
