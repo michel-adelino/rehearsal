@@ -12,8 +12,6 @@ export const mockDancers: Dancer[] = [
     classes: ['Advanced Ballet', 'Contemporary Techniques'],
     email: 'sarah.johnson@email.com',
     phone: '555-0101',
-    level: 'advanced',
-    genres: ['ballet', 'contemporary']
   },
   {
     id: 'dancer-2',
@@ -26,8 +24,6 @@ export const mockDancers: Dancer[] = [
     classes: ['Hip-Hop Fundamentals', 'Jazz Improvisation'],
     email: 'mike.chen@email.com',
     phone: '555-0102',
-    level: 'intermediate',
-    genres: ['hip-hop', 'jazz']
   },
   {
     id: 'dancer-3',
@@ -40,8 +36,6 @@ export const mockDancers: Dancer[] = [
     classes: ['Advanced Ballet', 'Contemporary Techniques', 'Jazz Advanced'],
     email: 'emma.rodriguez@email.com',
     phone: '555-0103',
-    level: 'advanced',
-    genres: ['ballet', 'contemporary', 'jazz']
   },
   {
     id: 'dancer-4',
@@ -54,8 +48,6 @@ export const mockDancers: Dancer[] = [
     classes: ['Hip-Hop Basics'],
     email: 'alex.thompson@email.com',
     phone: '555-0104',
-    level: 'beginner',
-    genres: ['hip-hop']
   },
   {
     id: 'dancer-5',
@@ -68,8 +60,6 @@ export const mockDancers: Dancer[] = [
     classes: ['Jazz Intermediate', 'Tap Dance'],
     email: 'zoe.williams@email.com',
     phone: '555-0105',
-    level: 'intermediate',
-    genres: ['jazz', 'tap']
   },
   {
     id: 'dancer-6',
@@ -82,8 +72,6 @@ export const mockDancers: Dancer[] = [
     classes: ['Contemporary Advanced', 'Jazz Performance'],
     email: 'jordan.kim@email.com',
     phone: '555-0106',
-    level: 'advanced',
-    genres: ['contemporary', 'jazz']
   },
   {
     id: 'dancer-7',
@@ -96,8 +84,6 @@ export const mockDancers: Dancer[] = [
     classes: ['Intermediate Ballet', 'Contemporary Basics'],
     email: 'maya.patel@email.com',
     phone: '555-0107',
-    level: 'intermediate',
-    genres: ['ballet', 'contemporary']
   },
   {
     id: 'dancer-8',
@@ -110,8 +96,6 @@ export const mockDancers: Dancer[] = [
     classes: ['Hip-Hop Beginner', 'Jazz Introduction'],
     email: 'ryan.davis@email.com',
     phone: '555-0108',
-    level: 'beginner',
-    genres: ['hip-hop', 'jazz']
   },
   {
     id: 'dancer-9',
@@ -124,8 +108,6 @@ export const mockDancers: Dancer[] = [
     classes: ['Advanced Ballet', 'Tap Advanced'],
     email: 'luna.martinez@email.com',
     phone: '555-0109',
-    level: 'advanced',
-    genres: ['ballet', 'tap']
   },
   {
     id: 'dancer-10',
@@ -138,7 +120,5 @@ export const mockDancers: Dancer[] = [
     classes: ['Contemporary Intermediate', 'Jazz Techniques'],
     email: 'kai.johnson@email.com',
     phone: '555-0110',
-    level: 'intermediate',
-    genres: ['contemporary', 'jazz']
   }
 ];
