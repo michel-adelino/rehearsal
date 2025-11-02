@@ -436,12 +436,26 @@ export default function Home() {
     }
   }, [routines]);
 
-  const handleDeleteRoutine = useCallback((routineId: string) => {
-    setRoutines(prev => prev.filter(r => r.id !== routineId));
-    setScheduledRoutines(prev => prev.filter(sr => sr.routineId !== routineId));
-    setShowRoutineModal(false);
-    setSelectedRoutine(null);
-    // Note: handleDeleteRoutine is only called from edit modal, not add modal
+  const handleDeleteRoutine = useCallback(async (routineId: string) => {
+    try {
+      const res = await fetch(`/api/routines/${routineId}`, {
+        method: 'DELETE',
+      });
+      
+      if (!res.ok) throw new Error('Failed to delete routine');
+      
+      // Update frontend state only after successful API call
+      setRoutines(prev => prev.filter(r => r.id !== routineId));
+      setScheduledRoutines(prev => prev.filter(sr => sr.routineId !== routineId));
+      setShowRoutineModal(false);
+      setSelectedRoutine(null);
+      
+      toast.success('Routine deleted successfully');
+    } catch (e: unknown) {
+      console.error('Failed to delete routine:', e);
+      const errorMessage = e instanceof Error ? e.message : 'Failed to delete routine';
+      toast.error(errorMessage);
+    }
   }, []);
 
   const handleToggleRoutineInactive = useCallback(async (routine: Routine) => {
@@ -1311,6 +1325,7 @@ export default function Home() {
           <ToolsSidebar
             rooms={rooms}
             dancers={dancers}
+            scheduledRoutines={scheduledRoutines}
             visibleRooms={visibleRooms}
             onRoomConfigChange={handleRoomConfigChange}
                 onEmailSchedule={handleEmailSchedule}

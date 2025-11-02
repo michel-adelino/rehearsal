@@ -1,13 +1,15 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Room } from '../../types/room';
 import { Dancer } from '../../types/dancer';
+import { ScheduledRoutine } from '../../types/schedule';
 import { Search, Settings, Mail, Download, Users, Sliders, AlertTriangle } from 'lucide-react';
 
 interface ToolsSidebarProps {
   rooms: Room[];
   dancers: Dancer[];
+  scheduledRoutines?: ScheduledRoutine[];
   visibleRooms: number;
   onRoomConfigChange: (visibleRooms: number) => void;
   onEmailSchedule: () => void;
@@ -19,6 +21,7 @@ interface ToolsSidebarProps {
 export const ToolsSidebar: React.FC<ToolsSidebarProps> = ({
   rooms,
   dancers,
+  scheduledRoutines = [],
   visibleRooms,
   onRoomConfigChange,
   onEmailSchedule,
@@ -32,6 +35,43 @@ export const ToolsSidebar: React.FC<ToolsSidebarProps> = ({
   const filteredDancers = dancers.filter(dancer =>
     dancer.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  // Calculate current week start and end dates
+  const getCurrentWeekRange = () => {
+    const now = new Date();
+    const day = now.getDay();
+    const diff = now.getDate() - day; // Get Sunday of current week
+    const weekStart = new Date(now);
+    weekStart.setDate(diff);
+    weekStart.setHours(0, 0, 0, 0);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    weekEnd.setHours(23, 59, 59, 999);
+    
+    return {
+      start: weekStart.toISOString().split('T')[0], // YYYY-MM-DD
+      end: weekEnd.toISOString().split('T')[0]
+    };
+  };
+
+  // Count routines scheduled for this week
+  const routinesThisWeek = useMemo(() => {
+    const weekRange = getCurrentWeekRange();
+    return scheduledRoutines.filter(sr => {
+      return sr.date >= weekRange.start && sr.date <= weekRange.end;
+    }).length;
+  }, [scheduledRoutines]);
+
+  // Count routines for selected dancer this week
+  const selectedDancerRoutinesThisWeek = useMemo(() => {
+    if (!selectedDancer) return 0;
+    const weekRange = getCurrentWeekRange();
+    return scheduledRoutines.filter(sr => {
+      const isInWeek = sr.date >= weekRange.start && sr.date <= weekRange.end;
+      const hasDancer = sr.routine.dancers.some(d => d.id === selectedDancer);
+      return isInWeek && hasDancer;
+    }).length;
+  }, [selectedDancer, scheduledRoutines]);
 
   return (
     <div className="w-64 bg-gray-50 border-l border-gray-200 flex flex-col h-screen overflow-y-auto">
@@ -106,7 +146,7 @@ export const ToolsSidebar: React.FC<ToolsSidebarProps> = ({
               <div className="text-xs text-blue-800">
                 <div className="font-medium">Selected Dancer</div>
                 <div className="mt-1">
-                  {dancers.find(d => d.id === selectedDancer)?.name} is scheduled in 3 routines this week
+                  {dancers.find(d => d.id === selectedDancer)?.name} is scheduled in {selectedDancerRoutinesThisWeek} routine{selectedDancerRoutinesThisWeek !== 1 ? 's' : ''} this week
                 </div>
               </div>
             </div>
@@ -169,7 +209,7 @@ export const ToolsSidebar: React.FC<ToolsSidebarProps> = ({
           </div>
           <div className="flex justify-between">
             <span className="text-gray-600">This Week:</span>
-            <span className="font-medium">12 routines</span>
+            <span className="font-medium">{routinesThisWeek} routine{routinesThisWeek !== 1 ? 's' : ''}</span>
           </div>
         </div>
       </div>

@@ -19,7 +19,7 @@ interface RoutineDetailsModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (routine: Routine) => void;
-  onDelete: (routineId: string) => void;
+  onDelete: (routineId: string) => Promise<void>;
   onTeachersChange?: (teachers: Teacher[]) => void;
   onGenresChange?: (genres: Genre[]) => void;
   onLevelsChange?: (levels: Level[]) => void;
@@ -69,10 +69,15 @@ export const RoutineDetailsModal: React.FC<RoutineDetailsModalProps> = ({
     onSave(editedRoutine);
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (window.confirm('Are you sure you want to delete this routine?')) {
-      onDelete(editedRoutine.id);
-      onClose();
+      try {
+        await onDelete(editedRoutine.id);
+        // Modal will be closed by parent on successful delete
+      } catch (error) {
+        // Error is handled by parent, keep modal open
+        console.error('Failed to delete routine:', error);
+      }
     }
   };
 
