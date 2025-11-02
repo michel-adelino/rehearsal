@@ -12,7 +12,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
-  // If there are dependent routines, you may wish to prevent delete or cascade. For now, let it throw if FK fails.
+  // Cascade delete: Deleting a teacher will automatically delete all associated routines
+  // and their scheduled routines due to onDelete: Cascade in the schema
   await prisma.teacher.delete({ where: { id: params.id } });
   return NextResponse.json({ ok: true });
 }
