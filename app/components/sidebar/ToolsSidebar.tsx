@@ -214,8 +214,8 @@ export const ToolsSidebar: React.FC<ToolsSidebarProps> = ({
         </div>
       </div>
 
-      {/* Conflicts Display */}
-      {conflicts.length > 0 && (
+      {/* Conflicts Display - Hidden */}
+      {/* {conflicts.length > 0 && (
         <div className="p-4 border-t border-gray-200">
           <div className="flex items-center gap-2 mb-3">
             <AlertTriangle className="w-4 h-4 text-red-600" />
@@ -238,7 +238,7 @@ export const ToolsSidebar: React.FC<ToolsSidebarProps> = ({
             ))}
           </div>
         </div>
-      )}
+      )} */}
     </div>
   );
 };

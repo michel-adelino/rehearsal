@@ -207,6 +207,8 @@ export default function Home() {
   // Pending routine when conflicts are detected
   const [pendingScheduledRoutine, setPendingScheduledRoutine] = useState<ScheduledRoutine | null>(null);
   const [pendingRoutine, setPendingRoutine] = useState<Routine | null>(null);
+  // Pending duration change when conflicts are detected during extension
+  const [pendingDurationChange, setPendingDurationChange] = useState<{ id: string; newDuration: number } | null>(null);
   
   // Conflict detection
   const { conflicts, showConflictModal, checkConflicts, resolveConflicts, dismissConflicts } = useConflictDetection();
@@ -760,7 +762,7 @@ export default function Home() {
     // Exclude current from conflict checks
     const others = scheduledRoutines.filter(sr => sr.id !== id);
 
-    // Room conflict check (all overlaps)
+    // Room conflict check (all overlaps) - still show toast error for room conflicts
     const roomOverlaps = getRoomOverlaps(others, updated);
     if (roomOverlaps.length > 0) {
       const roomName = rooms.find(r => r.id === updated.roomId)?.name || 'Studio';
@@ -770,23 +772,49 @@ export default function Home() {
       return;
     }
 
-    // Dancer conflicts
-    const hasConflicts = findConflicts(others, updated, rooms).length > 0;
+    // Dancer conflicts - show modal instead of toast error
+    const hasConflicts = checkConflicts(others, updated, rooms);
     if (hasConflicts) {
-      toast.error('Changing duration causes dancer conflicts.');
+      // Store pending duration change and show conflict modal
+      setPendingDurationChange({ id, newDuration });
+      console.log('Duration change has conflicts - awaiting user decision');
       return;
     }
 
-    // Apply update
+    // No conflicts: apply update
     setScheduledRoutines(prev => prev.map(sr => sr.id === id ? updated : sr));
     // Keep modal selection in sync
     setSelectedScheduledRoutine(prev => prev && prev.id === id ? updated : prev);
 
     toast.success('Rehearsal duration updated');
-  }, [scheduledRoutines, rooms]);
+  }, [scheduledRoutines, rooms, checkConflicts]);
 
   const handleResolveConflicts = useCallback(() => {
-    // User clicked "Schedule Anyway" - add the pending routine
+    // User clicked "Schedule Anyway" - handle pending routine or duration change
+    if (pendingDurationChange) {
+      // Apply pending duration change
+      const { id, newDuration } = pendingDurationChange;
+      const current = scheduledRoutines.find(sr => sr.id === id);
+      if (current) {
+        const updated: ScheduledRoutine = {
+          ...current,
+          duration: newDuration,
+          endTime: addMinutesToTime(current.startTime, newDuration),
+        };
+        
+        setScheduledRoutines(prev => prev.map(sr => sr.id === id ? updated : sr));
+        // Keep modal selection in sync
+        setSelectedScheduledRoutine(prev => prev && prev.id === id ? updated : prev);
+        
+        toast.success('Rehearsal duration updated');
+        console.log('Duration change applied after conflict resolution');
+      }
+      
+      setPendingDurationChange(null);
+      resolveConflicts(); // This already handles closing the modal
+      return;
+    }
+    
     if (pendingScheduledRoutine && pendingRoutine) {
       console.log('Adding pending routine after conflict resolution');
       
@@ -829,7 +857,7 @@ export default function Home() {
       setPendingRoutine(null);
       resolveConflicts(); // This already handles closing the modal
     }
-  }, [scheduledRoutines, pendingScheduledRoutine, pendingRoutine, resolveConflicts]);
+  }, [scheduledRoutines, pendingScheduledRoutine, pendingRoutine, pendingDurationChange, resolveConflicts]);
 
   // Save all schedule changes to database
   const handleSaveScheduleChanges = useCallback(async () => {
@@ -1004,12 +1032,17 @@ export default function Home() {
   }, [scheduledRoutines, savedScheduledRoutines]);
   
   const handleDismissConflicts = useCallback(() => {
-    // User clicked "Cancel" - don't add the routine, just clear pending state
-    console.log('Cancelling pending routine due to conflicts');
-    setPendingScheduledRoutine(null);
-    setPendingRoutine(null);
+    // User clicked "Cancel" - don't apply the change, just clear pending state
+    if (pendingDurationChange) {
+      console.log('Cancelling pending duration change due to conflicts');
+      setPendingDurationChange(null);
+    } else {
+      console.log('Cancelling pending routine due to conflicts');
+      setPendingScheduledRoutine(null);
+      setPendingRoutine(null);
+    }
     dismissConflicts();
-  }, [dismissConflicts]);
+  }, [dismissConflicts, pendingDurationChange]);
 
   const handleRoomConfigChange = useCallback((newVisibleRooms: number) => {
     setVisibleRooms(newVisibleRooms);
