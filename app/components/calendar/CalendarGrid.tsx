@@ -456,7 +456,7 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
             {/* Time column */}
             <div className="w-24 bg-gray-50 border-r border-gray-200 sticky left-0 z-30 flex-shrink-0" style={{ position: 'sticky', left: 0 }}>
               {timeSlots.map(({ hour, minute }, index) => (
-                <div key={index} className="h-16 border-b border-gray-200 flex items-center justify-center bg-white">
+                <div key={index} className="h-8 border-b border-gray-200 flex items-center justify-center bg-white">
                   <span className="text-sm text-gray-600 font-medium">
                     {formatTime(hour, minute)}
                   </span>
@@ -519,7 +519,7 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                                     onDrop={(routine, timeSlot) => onDrop(routine, { ...timeSlot, date: dateStr })}
                                     onMoveRoutine={(routine, timeSlot) => onMoveRoutine(routine, { ...timeSlot, date: dateStr })}
                                     hasConflict={hasConflict}
-                                    heightPx={16}
+                                    heightPx={8}
                                   >
                                     {foundRoutine && idx === foundIndex && (
                                       <ScheduledBlock
@@ -583,7 +583,7 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                                     onDrop={(routine, timeSlot) => onDrop(routine, { ...timeSlot, date: dateStr })}
                                     onMoveRoutine={(routine, timeSlot) => onMoveRoutine(routine, { ...timeSlot, date: dateStr })}
                                     hasConflict={hasConflict}
-                                    heightPx={32}
+                                    heightPx={16}
                                   >
                                     {foundRoutine && idx === foundIndex && (
                                       <ScheduledBlock
@@ -616,7 +616,7 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                             onDrop={(routine, timeSlot) => onDrop(routine, { ...timeSlot, date: dateStr })}
                             onMoveRoutine={(routine, timeSlot) => onMoveRoutine(routine, { ...timeSlot, date: dateStr })}
                             hasConflict={hasConflict}
-                            heightPx={64}
+                            heightPx={32}
                           >
                             {routine && (
                               <ScheduledBlock

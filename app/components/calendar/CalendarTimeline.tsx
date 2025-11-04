@@ -186,7 +186,7 @@ export const CalendarTimeline: React.FC<CalendarTimelineProps> = ({
                       if (hour >= endHour) return null;
                       
                       return (
-                        <div key={`${hour}-${minute}`} className="h-16 border-b border-gray-200 flex items-start justify-center pt-1">
+                        <div key={`${hour}-${minute}`} className="h-8 border-b border-gray-200 flex items-start justify-center pt-1">
                           <span className="text-xs text-gray-500">
                             {formatTime(hour, minute)}
                           </span>

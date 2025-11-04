@@ -19,10 +19,10 @@ interface ScheduledBlockProps {
 
 export const ScheduledBlock: React.FC<ScheduledBlockProps> = ({ routine, onClick, onDelete, timeInterval = 60, onResizeDuration, snapMinutes = 15, offsetTopPx = 2, hasConflict = false }) => {
   const duration = routine.duration;
-  const slotHeight = 64; // h-16 = 64px
+  const slotHeight = 32; // h-8 = 32px
   const minBlockHeight = 20; // ensure visibility/clickability for very short durations
   // Calculate height based on duration and time interval
-  // Each time slot is 64px tall, so we need (duration / timeInterval) slots
+  // Each time slot is 32px tall, so we need (duration / timeInterval) slots
   const numberOfSlots = duration / timeInterval;
   const [previewHeight, setPreviewHeight] = useState<number | null>(null);
   const height = Math.max(minBlockHeight, (previewHeight ?? (numberOfSlots * slotHeight)));

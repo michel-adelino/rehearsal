@@ -28,7 +28,7 @@ export const TimeSlot: React.FC<TimeSlotProps> = ({
   isCurrentTime = false,
   hasConflict = false,
   children,
-  heightPx = 64
+  heightPx = 32
 }) => {
   const [{ isOver, canDrop }, drop] = useDrop({
     accept: ['routine', 'scheduled-routine'],
