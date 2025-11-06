@@ -79,12 +79,12 @@ function formatTime(hour: number, minute: number): string {
   return `${displayHour}:${mm} ${ampm}`;
 }
 
-function dayNameFromDate(date: Date): string {
-  const names = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-  return names[date.getDay()];
-}
+// function dayNameFromDate(date: Date): string {
+//   const names = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+//   return names[date.getDay()];
+// }
 
-function buildEmailText(dancerName: string, items: Array<{ date: Date; startMinutes: number; duration: number; songTitle: string; roomName: string; teacherName: string }>, rangeLabel: string, customMessage?: string): string {
+function buildEmailText(dancerName: string, items: Array<{ date: Date; startMinutes: number; duration: number; songTitle: string; genreName: string; roomName: string; teacherName: string }>, rangeLabel: string, customMessage?: string): string {
   const customMsg = customMessage?.trim() ? `\n${customMessage.trim()}\n\n` : '';
   
   if (items.length === 0) {
@@ -101,7 +101,7 @@ function buildEmailText(dancerName: string, items: Array<{ date: Date; startMinu
       month: 'long', 
       day: 'numeric' 
     });
-    return `${formattedDate} - ${formatTime(start.hour, start.minute)} to ${formatTime(end.hour, end.minute)}\n  Routine: ${it.songTitle}\n  Room: ${it.roomName}\n  Teacher: ${it.teacherName}`;
+    return `${formattedDate} - ${formatTime(start.hour, start.minute)} to ${formatTime(end.hour, end.minute)}\n  Routine: ${it.songTitle}\n  Genre: ${it.genreName}\n  Room: ${it.roomName}\n  Teacher: ${it.teacherName}`;
   }).join('\n\n');
 
   return `Hi ${dancerName},${customMsg}Here's your rehearsal schedule for ${rangeLabel}:\n\n${lines}\n\nPlease arrive 10 minutes early for warm-up.\n\nSincerely, Performing Dance Arts.`;
@@ -167,6 +167,11 @@ async function sendWithSendGrid(toEmail: string, toName: string, subject: string
   }
 }
 
+// Helper function to send SSE message
+function sendSSEMessage(data: any): string {
+  return `data: ${JSON.stringify(data)}\n\n`;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as SendEmailRequestBody;
@@ -204,220 +209,291 @@ export async function POST(req: NextRequest) {
       rangeLabel = 'this week';
     }
 
-    const dancers = await prisma.dancer.findMany({ where: { id: { in: targetIds } } });
-    type DancerType = { id: string; name: string; email: string | null };
-    const dancerById = new Map<string, DancerType>(
-      dancers.map((d: DancerType) => [d.id, d])
-    );
-    const results: { id: string; status: 'sent' | 'skipped'; reason?: string }[] = [];
-
-    for (const id of targetIds) {
-      const dancer = dancerById.get(id);
-      if (!dancer) {
-        results.push({ id, status: 'skipped', reason: 'not found' });
-        continue;
-      }
-      const email = dancer.email;
-      if (!email) {
-        results.push({ id, status: 'skipped', reason: 'no email' });
-        continue;
-      }
-
-      const where: {
-        routine: { 
-          dancers: { some: { id: string } };
-          levelId?: { in: string[] } | null;
-        };
-        date?: { gte?: Date; lte?: Date };
-      } = {
-        routine: {
-          dancers: { some: { id } }
-        }
-      };
-      if (levelIds && levelIds.length > 0) {
-        where.routine.levelId = { in: levelIds };
-      }
-      if (fromDate || toDate) {
-        where.date = {};
-        if (fromDate) {
-          where.date.gte = fromDate;
-        }
-        if (toDate) {
-          where.date.lte = toDate;
-        }
-      }
-
-      const items = await prisma.scheduledRoutine.findMany({
-        where,
-        include: { routine: { include: { teacher: true, genre: true, level: true, dancers: true } }, room: true },
-        orderBy: [{ date: 'asc' }, { startMinutes: 'asc' }]
-      });
-
-      const simplified = items.map((it: {
-        date: Date;
-        startMinutes: number;
-        duration: number;
-        routine: { songTitle: string; teacher: { name: string } };
-        room: { name: string };
-      }) => {
-        // Extract calendar date from UTC date stored in database
-        // Database stores dates as UTC, so we use UTC components to get the calendar date
-        const dateObj = it.date instanceof Date ? it.date : new Date(it.date);
-        const dateString = formatDateString(dateObj);
-        const normalizedDate = parseDateString(dateString);
+    // Create a streaming response
+    const stream = new ReadableStream({
+      async start(controller) {
+        const encoder = new TextEncoder();
         
-        return {
-          date: normalizedDate,
-          startMinutes: it.startMinutes,
-          duration: it.duration,
-          songTitle: it.routine.songTitle,
-          roomName: it.room.name,
-          teacherName: it.routine.teacher.name
-        };
-      });
+        try {
+          const dancers = await prisma.dancer.findMany({ where: { id: { in: targetIds } } });
+          type DancerType = { id: string; name: string; email: string | null };
+          const dancerById = new Map<string, DancerType>(
+            dancers.map((d: DancerType) => [d.id, d])
+          );
+          const results: { id: string; status: 'sent' | 'skipped'; reason?: string }[] = [];
+          
+          // Send initial progress
+          controller.enqueue(encoder.encode(sendSSEMessage({ 
+            type: 'progress', 
+            current: 0, 
+            total: targetIds.length,
+            message: 'Starting to send emails...'
+          })));
 
-      const subject = `Your rehearsal schedule for ${rangeLabel}`;
-      const text = buildEmailText(dancer.name, simplified, rangeLabel, customMessage);
+          let currentIndex = 0;
+          for (const id of targetIds) {
+            currentIndex++;
+            const dancer = dancerById.get(id);
+            if (!dancer) {
+              results.push({ id, status: 'skipped', reason: 'not found' });
+              controller.enqueue(encoder.encode(sendSSEMessage({ 
+                type: 'progress', 
+                current: currentIndex, 
+                total: targetIds.length,
+                message: `Skipped ${id} (not found)`
+              })));
+              continue;
+            }
+            const email = dancer.email;
+            if (!email) {
+              results.push({ id, status: 'skipped', reason: 'no email' });
+              controller.enqueue(encoder.encode(sendSSEMessage({ 
+                type: 'progress', 
+                current: currentIndex, 
+                total: targetIds.length,
+                message: `Skipped ${dancer.name} (no email)`
+              })));
+              continue;
+            }
 
-      try {
-        await sendWithSendGrid(email, dancer.name, subject, text, fromEmail);
-        results.push({ id, status: 'sent' });
-      } catch (e: unknown) {
-        const errorMessage = e instanceof Error ? e.message : 'send failed';
-        results.push({ id, status: 'skipped', reason: errorMessage });
-      }
-    }
+            // Send progress update
+            controller.enqueue(encoder.encode(sendSSEMessage({ 
+              type: 'progress', 
+              current: currentIndex, 
+              total: targetIds.length,
+              message: `Sending to ${dancer.name}...`
+            })));
 
-    // Send emails to teachers about routines
-    const teacherResults: { teacherId: string; status: 'sent' | 'skipped'; reason?: string }[] = [];
+            const where: {
+              routine: { 
+                dancers: { some: { id: string } };
+                levelId?: { in: string[] } | null;
+              };
+              date?: { gte?: Date; lte?: Date };
+            } = {
+              routine: {
+                dancers: { some: { id } }
+              }
+            };
+            if (levelIds && levelIds.length > 0) {
+              where.routine.levelId = { in: levelIds };
+            }
+            if (fromDate || toDate) {
+              where.date = {};
+              if (fromDate) {
+                where.date.gte = fromDate;
+              }
+              if (toDate) {
+                where.date.lte = toDate;
+              }
+            }
 
-    // Collect all unique teacher IDs from routines that match the dancers/levels/date filters
-    const routineWhere: {
-      levelId?: { in: string[] };
-      dancers?: { some: { id: { in: string[] } } };
-    } = {};
-    
-    if (levelIds && levelIds.length > 0) {
-      routineWhere.levelId = { in: levelIds };
-    }
-    if (targetIds.length > 0) {
-      routineWhere.dancers = { some: { id: { in: targetIds } } };
-    }
+            const items = await prisma.scheduledRoutine.findMany({
+              where,
+              include: { routine: { include: { teacher: true, genre: true, level: true, dancers: true } }, room: true },
+              orderBy: [{ date: 'asc' }, { startMinutes: 'asc' }]
+            });
 
-    const dateWhere: {
-      gte?: Date;
-      lte?: Date;
-    } = {};
-    if (fromDate) dateWhere.gte = fromDate;
-    if (toDate) dateWhere.lte = toDate;
+            const simplified = items.map((it: {
+              date: Date;
+              startMinutes: number;
+              duration: number;
+              routine: { songTitle: string; teacher: { name: string }; genre: { name: string } };
+              room: { name: string };
+            }) => {
+              // Extract calendar date from UTC date stored in database
+              // Database stores dates as UTC, so we use UTC components to get the calendar date
+              const dateObj = it.date instanceof Date ? it.date : new Date(it.date);
+              const dateString = formatDateString(dateObj);
+              const normalizedDate = parseDateString(dateString);
+              
+              return {
+                date: normalizedDate,
+                startMinutes: it.startMinutes,
+                duration: it.duration,
+                songTitle: it.routine.songTitle,
+                genreName: it.routine.genre.name,
+                roomName: it.room.name,
+                teacherName: it.routine.teacher.name
+              };
+            });
 
-    // Find all scheduled routines that match the criteria to identify which teachers should get emails
-    const relevantScheduledRoutines = await prisma.scheduledRoutine.findMany({
-      where: {
-        routine: Object.keys(routineWhere).length > 0 ? routineWhere : undefined,
-        date: Object.keys(dateWhere).length > 0 ? dateWhere : undefined
-      },
-      include: {
-        routine: {
-          include: {
-            teacher: true
+            const subject = `Your rehearsal schedule for ${rangeLabel}`;
+            const text = buildEmailText(dancer.name, simplified, rangeLabel, customMessage);
+
+            try {
+              await sendWithSendGrid(email, dancer.name, subject, text, fromEmail);
+              results.push({ id, status: 'sent' });
+            } catch (e: unknown) {
+              const errorMessage = e instanceof Error ? e.message : 'send failed';
+              results.push({ id, status: 'skipped', reason: errorMessage });
+            }
           }
+
+          // Send emails to teachers about routines
+          const teacherResults: { teacherId: string; status: 'sent' | 'skipped'; reason?: string }[] = [];
+
+          // Collect all unique teacher IDs from routines that match the dancers/levels/date filters
+          const routineWhere: {
+            levelId?: { in: string[] };
+            dancers?: { some: { id: { in: string[] } } };
+          } = {};
+          
+          if (levelIds && levelIds.length > 0) {
+            routineWhere.levelId = { in: levelIds };
+          }
+          if (targetIds.length > 0) {
+            routineWhere.dancers = { some: { id: { in: targetIds } } };
+          }
+
+          const dateWhere: {
+            gte?: Date;
+            lte?: Date;
+          } = {};
+          if (fromDate) dateWhere.gte = fromDate;
+          if (toDate) dateWhere.lte = toDate;
+
+          // Find all scheduled routines that match the criteria to identify which teachers should get emails
+          const relevantScheduledRoutines = await prisma.scheduledRoutine.findMany({
+            where: {
+              routine: Object.keys(routineWhere).length > 0 ? routineWhere : undefined,
+              date: Object.keys(dateWhere).length > 0 ? dateWhere : undefined
+            },
+            include: {
+              routine: {
+                include: {
+                  teacher: true
+                }
+              }
+            }
+          });
+
+          // Get unique teacher IDs from routines that match the criteria
+          const teacherIds = Array.from(new Set(relevantScheduledRoutines.map(sr => sr.routine.teacherId)));
+          
+          if (teacherIds.length > 0) {
+            // Get all teachers with their email addresses
+            const teachers = await prisma.teacher.findMany({
+              where: { id: { in: teacherIds } }
+            });
+
+            const teacherById = new Map(teachers.map(t => [t.id, t]));
+
+            // For each teacher, get all their scheduled routines in the date range
+            // This gives teachers their complete schedule for the period
+            for (const teacherId of teacherIds) {
+              const teacher = teacherById.get(teacherId);
+              if (!teacher || !teacher.email) {
+                teacherResults.push({ teacherId, status: 'skipped', reason: teacher ? 'no email' : 'not found' });
+                continue;
+              }
+
+              const teacherWhere: {
+                routine: { teacherId: string; levelId?: { in: string[] } | null };
+                date?: { gte?: Date; lte?: Date };
+              } = {
+                routine: {
+                  teacherId
+                }
+              };
+
+              // Apply level filter if provided (to match what dancers received)
+              if (levelIds && levelIds.length > 0) {
+                teacherWhere.routine.levelId = { in: levelIds };
+              }
+
+              // Apply date range filter
+              if (fromDate || toDate) {
+                teacherWhere.date = {};
+                if (fromDate) teacherWhere.date.gte = fromDate;
+                if (toDate) teacherWhere.date.lte = toDate;
+              }
+
+              const teacherItems = await prisma.scheduledRoutine.findMany({
+                where: teacherWhere,
+                include: {
+                  routine: {
+                    include: {
+                      teacher: true,
+                      dancers: true
+                    }
+                  },
+                  room: true
+                },
+                orderBy: [{ date: 'asc' }, { startMinutes: 'asc' }]
+              });
+
+              const teacherSimplified = teacherItems.map((it: {
+                date: Date;
+                startMinutes: number;
+                duration: number;
+                routine: { songTitle: string; dancers: Array<{ name: string }> };
+                room: { name: string };
+              }) => {
+                // Extract calendar date from UTC date stored in database
+                // Database stores dates as UTC, so we use UTC components to get the calendar date
+                const dateObj = it.date instanceof Date ? it.date : new Date(it.date);
+                const dateString = formatDateString(dateObj);
+                const normalizedDate = parseDateString(dateString);
+                
+                return {
+                  date: normalizedDate,
+                  startMinutes: it.startMinutes,
+                  duration: it.duration,
+                  songTitle: it.routine.songTitle,
+                  roomName: it.room.name,
+                  dancerNames: it.routine.dancers.map(d => d.name)
+                };
+              });
+
+              const teacherSubject = `Your rehearsal schedule for ${rangeLabel}`;
+              const teacherText = buildTeacherEmailText(teacher.name, teacherSimplified, rangeLabel, customMessage);
+
+              try {
+                await sendWithSendGrid(teacher.email, teacher.name, teacherSubject, teacherText, fromEmail);
+                teacherResults.push({ teacherId, status: 'sent' });
+              } catch (e: unknown) {
+                const errorMessage = e instanceof Error ? e.message : 'send failed';
+                teacherResults.push({ teacherId, status: 'skipped', reason: errorMessage });
+              }
+            }
+          }
+
+          // Send final result
+          const sent = results.filter((r) => r.status === 'sent').length;
+          const skipped = results.length - sent;
+          const teacherSent = teacherResults.filter((r) => r.status === 'sent').length;
+          const teacherSkipped = teacherResults.length - teacherSent;
+          
+          controller.enqueue(encoder.encode(sendSSEMessage({ 
+            type: 'complete', 
+            results, 
+            teacherResults,
+            sent,
+            skipped,
+            teacherSent,
+            teacherSkipped
+          })));
+          
+          controller.close();
+        } catch (error: unknown) {
+          const errorMessage = error instanceof Error ? error.message : 'Failed to send email';
+          controller.enqueue(encoder.encode(sendSSEMessage({ 
+            type: 'error', 
+            message: errorMessage 
+          })));
+          controller.close();
         }
       }
     });
 
-    // Get unique teacher IDs from routines that match the criteria
-    const teacherIds = Array.from(new Set(relevantScheduledRoutines.map(sr => sr.routine.teacherId)));
-    
-    if (teacherIds.length > 0) {
-      // Get all teachers with their email addresses
-      const teachers = await prisma.teacher.findMany({
-        where: { id: { in: teacherIds } }
-      });
-
-      const teacherById = new Map(teachers.map(t => [t.id, t]));
-
-      // For each teacher, get all their scheduled routines in the date range
-      // This gives teachers their complete schedule for the period
-      for (const teacherId of teacherIds) {
-        const teacher = teacherById.get(teacherId);
-        if (!teacher || !teacher.email) {
-          teacherResults.push({ teacherId, status: 'skipped', reason: teacher ? 'no email' : 'not found' });
-          continue;
-        }
-
-        const teacherWhere: {
-          routine: { teacherId: string; levelId?: { in: string[] } | null };
-          date?: { gte?: Date; lte?: Date };
-        } = {
-          routine: {
-            teacherId
-          }
-        };
-
-        // Apply level filter if provided (to match what dancers received)
-        if (levelIds && levelIds.length > 0) {
-          teacherWhere.routine.levelId = { in: levelIds };
-        }
-
-        // Apply date range filter
-        if (fromDate || toDate) {
-          teacherWhere.date = {};
-          if (fromDate) teacherWhere.date.gte = fromDate;
-          if (toDate) teacherWhere.date.lte = toDate;
-        }
-
-        const teacherItems = await prisma.scheduledRoutine.findMany({
-          where: teacherWhere,
-          include: {
-            routine: {
-              include: {
-                teacher: true,
-                dancers: true
-              }
-            },
-            room: true
-          },
-          orderBy: [{ date: 'asc' }, { startMinutes: 'asc' }]
-        });
-
-        const teacherSimplified = teacherItems.map((it: {
-          date: Date;
-          startMinutes: number;
-          duration: number;
-          routine: { songTitle: string; dancers: Array<{ name: string }> };
-          room: { name: string };
-        }) => {
-          // Extract calendar date from UTC date stored in database
-          // Database stores dates as UTC, so we use UTC components to get the calendar date
-          const dateObj = it.date instanceof Date ? it.date : new Date(it.date);
-          const dateString = formatDateString(dateObj);
-          const normalizedDate = parseDateString(dateString);
-          
-          return {
-            date: normalizedDate,
-            startMinutes: it.startMinutes,
-            duration: it.duration,
-            songTitle: it.routine.songTitle,
-            roomName: it.room.name,
-            dancerNames: it.routine.dancers.map(d => d.name)
-          };
-        });
-
-        const teacherSubject = `Your rehearsal schedule for ${rangeLabel}`;
-        const teacherText = buildTeacherEmailText(teacher.name, teacherSimplified, rangeLabel, customMessage);
-
-        try {
-          await sendWithSendGrid(teacher.email, teacher.name, teacherSubject, teacherText, fromEmail);
-          teacherResults.push({ teacherId, status: 'sent' });
-        } catch (e: unknown) {
-          const errorMessage = e instanceof Error ? e.message : 'send failed';
-          teacherResults.push({ teacherId, status: 'skipped', reason: errorMessage });
-        }
-      }
-    }
-
-    return NextResponse.json({ success: true, results, teacherResults });
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      },
+    });
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Failed to send email';
     return NextResponse.json({ message: errorMessage }, { status: 500 });

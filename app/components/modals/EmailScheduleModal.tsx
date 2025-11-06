@@ -36,6 +36,7 @@ export const EmailScheduleModal: React.FC<EmailScheduleModalProps> = ({
   const [levels, setLevels] = useState<Level[]>([]);
   const [selectedLevelIds, setSelectedLevelIds] = useState<string[]>([]);
   const [showLevelDropdown, setShowLevelDropdown] = useState(false);
+  const [progress, setProgress] = useState<{ current: number; total: number; message: string } | null>(null);
   
   // Sorting state
   type SortField = 'firstName' | 'lastName' | 'age' | 'email' | 'phone' | 'name';
@@ -89,6 +90,7 @@ ${routines.length === 0 ? 'No rehearsals scheduled this week.' : routines.map(ro
   
   return `${formattedDate} - ${startTime} to ${endTime}
   Routine: ${routine.routine.songTitle}
+  Genre: ${routine.routine.genre.name}
   Room: ${routine.roomId}
   Teacher: ${routine.routine.teacher.name}`;
 }).join('\n\n')}
@@ -148,6 +150,7 @@ Sincerely, Performing Dance Arts.
     if (selectedDancers.length === 0) return;
     try {
       setIsSending(true);
+      setProgress({ current: 0, total: selectedDancers.length, message: 'Starting...' });
       const payload: PostBody = { dancerIds: selectedDancers };
       if (selectedLevelIds.length > 0) {
         payload.levelIds = selectedLevelIds;
@@ -160,6 +163,7 @@ Sincerely, Performing Dance Arts.
         if (!from && !to) {
           toast.error('Choose a from/to date or select a preset');
           setIsSending(false);
+          setProgress(null);
           return;
         }
         if (from) payload.from = from;
@@ -177,29 +181,126 @@ Sincerely, Performing Dance Arts.
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data?.message || 'Failed to send');
-      }
-      const data = (await res.json().catch(() => ({}))) as { 
-        results?: { id: string; status: 'sent' | 'skipped'; reason?: string }[];
-        teacherResults?: { teacherId: string; status: 'sent' | 'skipped'; reason?: string }[];
-      };
-      const sent = (data?.results || []).filter((r) => r.status === 'sent').length;
-      const skipped = (data?.results || []).length - sent;
-      const teacherSent = (data?.teacherResults || []).filter((r) => r.status === 'sent').length;
-      const teacherSkipped = (data?.teacherResults || []).length - teacherSent;
       
-      let message = `Emails sent: ${sent}${skipped ? `, skipped: ${skipped}` : ''}`;
-      if (teacherSent > 0 || teacherSkipped > 0) {
-        message += ` | Teachers: ${teacherSent}${teacherSkipped ? `, skipped: ${teacherSkipped}` : ''}`;
+      if (!res.ok) {
+        // Try to read error message
+        try {
+          const text = await res.text();
+          try {
+            const data = JSON.parse(text);
+            throw new Error(data?.message || 'Failed to send');
+          } catch {
+            throw new Error(text || 'Failed to send');
+          }
+        } catch (e) {
+          if (e instanceof Error) throw e;
+          throw new Error('Failed to send email');
+        }
       }
-      toast.success(message);
+
+      // Check if response is streaming (text/event-stream)
+      const contentType = res.headers.get('content-type');
+      if (!contentType || !contentType.includes('text/event-stream')) {
+        // Fallback to JSON response (for backwards compatibility)
+        const data = await res.json().catch(() => ({})) as { 
+          results?: { id: string; status: 'sent' | 'skipped'; reason?: string }[];
+          teacherResults?: { teacherId: string; status: 'sent' | 'skipped'; reason?: string }[];
+        };
+        const sent = (data?.results || []).filter((r) => r.status === 'sent').length;
+        const skipped = (data?.results || []).length - sent;
+        const teacherSent = (data?.teacherResults || []).filter((r) => r.status === 'sent').length;
+        const teacherSkipped = (data?.teacherResults || []).length - teacherSent;
+        
+        let message = `Emails sent: ${sent}${skipped ? `, skipped: ${skipped}` : ''}`;
+        if (teacherSent > 0 || teacherSkipped > 0) {
+          message += ` | Teachers: ${teacherSent}${teacherSkipped ? `, skipped: ${teacherSkipped}` : ''}`;
+        }
+        toast.success(message);
+        return;
+      }
+
+      // Read the streaming response
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+      
+      if (!reader) {
+        throw new Error('No response body');
+      }
+
+      let buffer = '';
+      let finalData: any = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              
+              if (data.type === 'progress') {
+                setProgress({
+                  current: data.current,
+                  total: data.total,
+                  message: data.message
+                });
+              } else if (data.type === 'complete') {
+                finalData = data;
+                setProgress({
+                  current: data.total || selectedDancers.length,
+                  total: data.total || selectedDancers.length,
+                  message: 'Complete!'
+                });
+              } else if (data.type === 'error') {
+                throw new Error(data.message || 'Unknown error');
+              }
+            } catch (e) {
+              console.error('Failed to parse SSE message:', e);
+            }
+          }
+        }
+      }
+
+      // Process any remaining buffer
+      if (buffer.trim()) {
+        const lines = buffer.split('\n');
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.type === 'complete') {
+                finalData = data;
+              }
+            } catch (e) {
+              console.error('Failed to parse SSE message:', e);
+            }
+          }
+        }
+      }
+
+      if (finalData) {
+        const sent = (finalData.results || []).filter((r: { status: string }) => r.status === 'sent').length;
+        const skipped = (finalData.results || []).length - sent;
+        const teacherSent = (finalData.teacherResults || []).filter((r: { status: string }) => r.status === 'sent').length;
+        const teacherSkipped = (finalData.teacherResults || []).length - teacherSent;
+        
+        let message = `Emails sent: ${sent}${skipped ? `, skipped: ${skipped}` : ''}`;
+        if (teacherSent > 0 || teacherSkipped > 0) {
+          message += ` | Teachers: ${teacherSent}${teacherSkipped ? `, skipped: ${teacherSkipped}` : ''}`;
+        }
+        toast.success(message);
+      }
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Failed to send email';
       toast.error(message);
     } finally {
       setIsSending(false);
+      setProgress(null);
     }
   };
 
@@ -802,27 +903,44 @@ Sincerely, Performing Dance Arts.
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between gap-3 p-6 border-t border-gray-200 bg-gray-50">
-          <div className="text-sm text-gray-600">
-            {selectedDancers.length > 0 && (
-              <span>{selectedDancers.length} dancer{selectedDancers.length !== 1 ? 's' : ''} selected</span>
-            )}
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-            >
-              Close
-            </button>
-            <button
-              onClick={handleSendEmail}
-              disabled={!canSend}
-              className="flex items-center gap-2 px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              <Mail className="w-4 h-4" />
-              {isSending ? 'Sending...' : `Send Email${selectedDancers.length > 1 ? ` to ${selectedDancers.length}` : ''}`}
-            </button>
+        <div className="p-6 border-t border-gray-200 bg-gray-50">
+          {progress && (
+            <div className="mb-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-gray-700">{progress.message}</span>
+                <span className="text-sm text-gray-600">{progress.current} / {progress.total}</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2.5">
+                <div 
+                  className="bg-green-600 h-2.5 rounded-full transition-all duration-300"
+                  style={{ width: `${(progress.current / progress.total) * 100}%` }}
+                />
+              </div>
+            </div>
+          )}
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-sm text-gray-600">
+              {selectedDancers.length > 0 && (
+                <span>{selectedDancers.length} dancer{selectedDancers.length !== 1 ? 's' : ''} selected</span>
+              )}
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={onClose}
+                className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                disabled={isSending}
+              >
+                Close
+              </button>
+              <button
+                onClick={handleSendEmail}
+                disabled={!canSend}
+                className="flex items-center gap-2 px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                <Mail className="w-4 h-4" />
+                {isSending ? 'Sending...' : `Send Email${selectedDancers.length > 1 ? ` to ${selectedDancers.length}` : ''}`}
+              </button>
+            </div>
           </div>
         </div>
       </div>
