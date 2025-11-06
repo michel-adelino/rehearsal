@@ -38,7 +38,7 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
   onResizeRoutineDuration
 }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [viewMode, setViewMode] = useState<ViewMode>('week');
+  const [viewMode, setViewMode] = useState<ViewMode>('4days');
   const [startHour, setStartHour] = useState(9);
   const [endHour, setEndHour] = useState(21);
   const [timeInterval, setTimeInterval] = useState(30);
