@@ -899,17 +899,28 @@ export async function POST(req: NextRequest) {
           );
 
           // Filter by selected teacherIds if provided
-          if (teacherIds && teacherIds.length > 0) {
-            const beforeFilter = teacherIdsToEmail.length;
-            teacherIdsToEmail = teacherIdsToEmail.filter((id) =>
-              teacherIds.includes(id)
-            );
-            console.log(
-              `[EMAIL API] Filtered teachers: ${beforeFilter} -> ${teacherIdsToEmail.length} (user selected ${teacherIds.length} teachers)`
-            );
+          // If teacherIds is explicitly provided (even if empty array), use it to filter
+          // If teacherIds is undefined/null, email all teachers (backward compatibility)
+          if (teacherIds !== undefined && teacherIds !== null) {
+            if (teacherIds.length > 0) {
+              const beforeFilter = teacherIdsToEmail.length;
+              teacherIdsToEmail = teacherIdsToEmail.filter((id) =>
+                teacherIds.includes(id)
+              );
+              console.log(
+                `[EMAIL API] Filtered teachers: ${beforeFilter} -> ${teacherIdsToEmail.length} (user selected ${teacherIds.length} teachers)`
+              );
+            } else {
+              // Empty array means user explicitly selected no teachers
+              teacherIdsToEmail = [];
+              console.log(
+                "[EMAIL API] User selected no teachers - no teacher emails will be sent"
+              );
+            }
           } else {
+            // teacherIds not provided - backward compatibility: email all teachers
             console.log(
-              "[EMAIL API] No teacher filter applied, will email all teachers"
+              "[EMAIL API] No teacher filter provided, will email all teachers (backward compatibility)"
             );
           }
 
