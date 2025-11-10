@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/app/lib/prisma';
 import { Prisma } from '@prisma/client';
 
+export const dynamic = 'force-dynamic';
+
 // Helper to parse YYYY-MM-DD to UTC Date (midnight UTC)
 // This ensures dates are stored consistently regardless of server timezone
 function parseDateString(dateString: string): Date {
