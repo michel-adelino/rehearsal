@@ -108,13 +108,14 @@ export default function Home() {
     const load = async () => {
       setIsLoading(true);
       try {
-        const [dancersRes, routinesRes, scheduledRes] = await Promise.all([
+        const [dancersRes, routinesRes, scheduledRes, settingsRes] = await Promise.all([
           fetch('/api/dancers'),
           fetch('/api/routines'),
-          fetch('/api/scheduled')
+          fetch('/api/scheduled'),
+          fetch('/api/settings')
         ]);
-        const [dancersJson, routinesJson, scheduledJson] = await Promise.all([
-          dancersRes.json(), routinesRes.json(), scheduledRes.json()
+        const [dancersJson, routinesJson, scheduledJson, settingsJson] = await Promise.all([
+          dancersRes.json(), routinesRes.json(), scheduledRes.json(), settingsRes.json()
         ]);
         setDancers(dancersJson);
         // Ensure all routines have scheduledHours set (default to 0 if missing)
@@ -160,6 +161,17 @@ export default function Home() {
         });
         setScheduledRoutines(mapped);
         setSavedScheduledRoutines(mapped); // Store saved state for comparison
+        
+        // Load room count from settings
+        if (settingsJson && settingsJson.visibleRooms) {
+          const savedVisibleRooms = settingsJson.visibleRooms;
+          setVisibleRooms(savedVisibleRooms);
+          // Update room active status based on saved count
+          setRooms(prev => prev.map((room, index) => ({
+            ...room,
+            isActive: index < savedVisibleRooms
+          })));
+        }
       } catch (e) {
         console.error('Failed to load initial data', e);
         toast.error('Failed to load data. Please refresh the page.');
@@ -1027,12 +1039,27 @@ export default function Home() {
     dismissConflicts();
   }, [dismissConflicts, pendingDurationChange]);
 
-  const handleRoomConfigChange = useCallback((newVisibleRooms: number) => {
+  const handleRoomConfigChange = useCallback(async (newVisibleRooms: number) => {
     setVisibleRooms(newVisibleRooms);
     setRooms(prev => prev.map((room, index) => ({
       ...room,
       isActive: index < newVisibleRooms
     })));
+    
+    // Save to database
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ visibleRooms: newVisibleRooms }),
+      });
+      
+      if (!res.ok) {
+        console.error('Failed to save room count to database');
+      }
+    } catch (e) {
+      console.error('Failed to save room count to database:', e);
+    }
   }, []);
 
   const handleShowDancers = useCallback(() => {

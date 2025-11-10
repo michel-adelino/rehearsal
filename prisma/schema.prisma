@@ -81,3 +81,9 @@ model ScheduledRoutine {
 
   @@unique([date, roomId, startMinutes])
 }
+
+model Settings {
+  id         String   @id @default("settings")
+  visibleRooms Int    @default(4)
+  updatedAt  DateTime @updatedAt
+}
