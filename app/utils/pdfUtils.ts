@@ -205,7 +205,7 @@ const generateMultiDayCalendarGridHTML = (scheduledRoutines: ScheduledRoutine[],
   const routinesByDate = new Map<string, ScheduledRoutine[]>();
   validRoutines.forEach(routine => {
     // Normalize date string to ensure consistent format (trim and validate)
-    let normalizedDate = routine.date.trim();
+    const normalizedDate = routine.date.trim();
     // Ensure it's in YYYY-MM-DD format
     if (!normalizedDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
       console.warn(`[PDF] Invalid date format: ${normalizedDate}, skipping routine ${routine.id}`);
@@ -667,29 +667,29 @@ const generateCalendarGridBody = (scheduledRoutines: ScheduledRoutine[], date: D
           
           // Check if this row has any routines (either starting here or continuing from earlier)
           // Don't skip rows - render all rows to ensure spanning routines are visible
-          const hasAnyRoutine = activeRooms.some((room, roomIndex) => {
-            const cellKey = `${rowIndex}-${roomIndex}`;
-            const cellData = cellMap.get(cellKey);
+          // const hasAnyRoutine = activeRooms.some((room, roomIndex) => {
+          //   const cellKey = `${rowIndex}-${roomIndex}`;
+          //   const cellData = cellMap.get(cellKey);
             
-            // Check if there's a routine starting here
-            if (cellData && cellData.routine) {
-              return true;
-            }
+          //   // Check if there's a routine starting here
+          //   if (cellData && cellData.routine) {
+          //     return true;
+          //   }
             
-            // Check if this cell is occupied by a routine from an earlier row
-            for (let prevRow = rowIndex - 1; prevRow >= 0; prevRow--) {
-              const prevKey = `${prevRow}-${roomIndex}`;
-              const prevData = cellMap.get(prevKey);
-              if (prevData && prevData.routine) {
-                const rowSpan = prevData.rowSpan;
-                if (rowIndex < prevRow + rowSpan) {
-                  return true;
-                }
-              }
-            }
+          //   // Check if this cell is occupied by a routine from an earlier row
+          //   for (let prevRow = rowIndex - 1; prevRow >= 0; prevRow--) {
+          //     const prevKey = `${prevRow}-${roomIndex}`;
+          //     const prevData = cellMap.get(prevKey);
+          //     if (prevData && prevData.routine) {
+          //       const rowSpan = prevData.rowSpan;
+          //       if (rowIndex < prevRow + rowSpan) {
+          //         return true;
+          //       }
+          //     }
+          //   }
             
-            return false;
-          });
+          //   return false;
+          // });
           
           // Render all rows that have routines OR are within the time range
           // This ensures routines spanning multiple rows are always visible
