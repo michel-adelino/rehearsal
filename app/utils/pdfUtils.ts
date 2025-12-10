@@ -201,11 +201,16 @@ const generateMultiDayCalendarGridHTML = (scheduledRoutines: ScheduledRoutine[],
   
   console.log(`[PDF] After validation: ${validRoutines.length} valid routines (filtered ${scheduledRoutines.length - validRoutines.length})`);
 
-  // Group routines by date
+  // Group routines by date - ensure consistent date string format
   const routinesByDate = new Map<string, ScheduledRoutine[]>();
   validRoutines.forEach(routine => {
-    // Normalize date string to ensure consistent format
-    const normalizedDate = routine.date.trim();
+    // Normalize date string to ensure consistent format (trim and validate)
+    let normalizedDate = routine.date.trim();
+    // Ensure it's in YYYY-MM-DD format
+    if (!normalizedDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      console.warn(`[PDF] Invalid date format: ${normalizedDate}, skipping routine ${routine.id}`);
+      return;
+    }
     if (!routinesByDate.has(normalizedDate)) {
       routinesByDate.set(normalizedDate, []);
     }
@@ -229,6 +234,9 @@ const generateMultiDayCalendarGridHTML = (scheduledRoutines: ScheduledRoutine[],
   
   console.log(`[PDF] ===== PDF Generation Complete =====`);
   console.log(`[PDF] Generated ${dayPages.length} day pages`);
+  console.log(`[PDF] Total routines processed: ${validRoutines.length}`);
+  console.log(`[PDF] Routines grouped by ${datesWithSchedules.length} unique dates`);
+  console.log(`[PDF] ====================================`);
 
   // Combine all day pages with page breaks
   const formatDateString = (dateStr: string) => {
@@ -396,11 +404,22 @@ const generateMultiDayCalendarGridHTML = (scheduledRoutines: ScheduledRoutine[],
 
 const generateCalendarGridBody = (scheduledRoutines: ScheduledRoutine[], date: Date, rooms: Room[]): string => {
   // Format date as YYYY-MM-DD (date-only, no timezone)
+  // Use local date components to avoid timezone shifts
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   const dateStr = `${year}-${month}-${day}`;
   console.log(`[PDF] Generating calendar grid for date ${dateStr} with ${scheduledRoutines.length} routines`);
+  
+  // Verify all routines match this date (for debugging)
+  const mismatchedDates = scheduledRoutines.filter(sr => {
+    const srDate = sr.date.trim();
+    return srDate !== dateStr;
+  });
+  if (mismatchedDates.length > 0) {
+    console.warn(`[PDF] Warning: ${mismatchedDates.length} routines have date mismatch for ${dateStr}:`, 
+      mismatchedDates.map(sr => ({ id: sr.id, date: sr.date })));
+  }
   
   // Filter out invalid routines (defensive check)
   const validRoutines = scheduledRoutines.filter(sr => {
@@ -412,19 +431,27 @@ const generateCalendarGridBody = (scheduledRoutines: ScheduledRoutine[], date: D
            sr.date;
     
     // Check if room exists (but don't require it to be active - inactive rooms might still have schedules)
+    // Only filter if room truly doesn't exist - inactive rooms should still show
     const roomExists = rooms.some(r => r.id === sr.roomId);
     
-    if (!hasBasicData || !roomExists) {
-      console.warn(`[PDF] Filtered out routine for ${dateStr}:`, {
+    if (!hasBasicData) {
+      console.warn(`[PDF] Filtered out routine for ${dateStr} - missing basic data:`, {
         id: sr?.id,
-        hasBasicData,
-        roomExists,
-        roomId: sr?.roomId,
-        availableRooms: rooms.map(r => r.id)
+        hasRoutine: !!sr?.routine,
+        hasRoomId: !!sr?.roomId,
+        hasStartTime: !!sr?.startTime,
+        hasEndTime: !!sr?.endTime,
+        hasDate: !!sr?.date
       });
+      return false;
     }
     
-    return hasBasicData && roomExists;
+    if (!roomExists) {
+      console.warn(`[PDF] Warning: Routine ${sr.id} has roomId ${sr.roomId} that doesn't exist in rooms list, but including it anyway`);
+      // Don't filter out - include it even if room doesn't exist (room might have been deleted)
+    }
+    
+    return hasBasicData; // Only filter on basic data, not room existence
   });
   
   console.log(`[PDF] Date ${dateStr}: ${validRoutines.length} valid routines (filtered ${scheduledRoutines.length - validRoutines.length})`);
@@ -435,21 +462,34 @@ const generateCalendarGridBody = (scheduledRoutines: ScheduledRoutine[], date: D
     .filter(r => r.isActive)
     .sort((a, b) => a.id.localeCompare(b.id));
 
-  // Find time range for the day
+  // Find time range for the day - include all routines to ensure proper range
   let minHour = 24;
   let maxHour = 0;
   validRoutines.forEach(sr => {
     if (sr.startTime && sr.endTime) {
       const startMin = sr.startTime.hour * 60 + sr.startTime.minute;
       const endMin = sr.endTime.hour * 60 + sr.endTime.minute;
-      minHour = Math.min(minHour, Math.floor(startMin / 60));
-      maxHour = Math.max(maxHour, Math.ceil(endMin / 60));
+      const startHour = Math.floor(startMin / 60);
+      const endHour = Math.ceil(endMin / 60);
+      minHour = Math.min(minHour, startHour);
+      maxHour = Math.max(maxHour, endHour);
     }
   });
 
   // Default to 9 AM - 9 PM if no routines
-  if (minHour === 24) minHour = 9;
-  if (maxHour === 0) maxHour = 21;
+  // But add padding to ensure routines at edges are included
+  if (minHour === 24) {
+    minHour = 9;
+  } else {
+    // Add 1 hour padding before first routine to ensure it's visible
+    minHour = Math.max(0, minHour - 1);
+  }
+  if (maxHour === 0) {
+    maxHour = 21;
+  } else {
+    // Add 1 hour padding after last routine to ensure it's visible
+    maxHour = Math.min(24, maxHour + 1);
+  }
 
   // Generate time slots (15-minute intervals for more precision)
   const timeSlots: Array<{ hour: number; minute: number }> = [];
@@ -516,6 +556,19 @@ const generateCalendarGridBody = (scheduledRoutines: ScheduledRoutine[], date: D
       const roomIndex = activeRooms.findIndex(r => r.id === routine.roomId);
       if (roomIndex >= 0) {
         const cellKey = `${startRowIndex}-${roomIndex}`;
+        
+        // Check for cell collision (two routines trying to occupy same cell)
+        const existingCell = cellMap.get(cellKey);
+        if (existingCell && existingCell.routine) {
+          console.warn(`[PDF] Cell collision detected at ${cellKey}:`, {
+            existing: existingCell.routine.id,
+            new: routine.id,
+            existingTime: `${existingCell.routine.startTime.hour}:${existingCell.routine.startTime.minute}`,
+            newTime: `${routine.startTime.hour}:${routine.startTime.minute}`
+          });
+          // Place the new routine anyway (overwrite) - this shouldn't happen but handle gracefully
+        }
+        
         const rowSpan = getRowSpan(routine);
         cellMap.set(cellKey, { routine, rowSpan });
         placedRoutineIds.add(routine.id);
@@ -528,10 +581,31 @@ const generateCalendarGridBody = (scheduledRoutines: ScheduledRoutine[], date: D
           }
         }
       } else {
-        console.warn(`[PDF] Routine ${routine.id} has roomId ${routine.roomId} that doesn't exist in active rooms`);
+        // Room not in active rooms - try to find it in all rooms or create a placeholder
+        console.warn(`[PDF] Routine ${routine.id} has roomId ${routine.roomId} that doesn't exist in active rooms. Available active rooms:`, activeRooms.map(r => r.id));
+        // Try to find in all rooms (including inactive)
+        const allRoomIndex = rooms.findIndex(r => r.id === routine.roomId);
+        if (allRoomIndex >= 0) {
+          // Room exists but is inactive - we'll skip it for now since we only show active rooms
+          console.warn(`[PDF] Room ${routine.roomId} exists but is inactive - routine will not be displayed`);
+        } else {
+          console.warn(`[PDF] Room ${routine.roomId} does not exist at all - routine will not be displayed`);
+        }
       }
     } else {
-      console.warn(`[PDF] Could not find time slot for routine ${routine.id} starting at ${routine.startTime.hour}:${routine.startTime.minute}`);
+      // Try to place at first available slot if routine starts before calculated range
+      if (timeSlots.length > 0 && routineStart < timeSlots[0].hour * 60 + timeSlots[0].minute) {
+        console.warn(`[PDF] Routine ${routine.id} starts at ${routine.startTime.hour}:${routine.startTime.minute} before first time slot ${timeSlots[0].hour}:${timeSlots[0].minute}, placing at first slot`);
+        const roomIndex = activeRooms.findIndex(r => r.id === routine.roomId);
+        if (roomIndex >= 0) {
+          const cellKey = `0-${roomIndex}`;
+          const rowSpan = getRowSpan(routine);
+          cellMap.set(cellKey, { routine, rowSpan });
+          placedRoutineIds.add(routine.id);
+        }
+      } else {
+        console.warn(`[PDF] Could not find time slot for routine ${routine.id} starting at ${routine.startTime.hour}:${routine.startTime.minute}`);
+      }
     }
   });
   
@@ -592,6 +666,7 @@ const generateCalendarGridBody = (scheduledRoutines: ScheduledRoutine[], date: D
           const timeLabel = formatTime(hour, minute);
           
           // Check if this row has any routines (either starting here or continuing from earlier)
+          // Don't skip rows - render all rows to ensure spanning routines are visible
           const hasAnyRoutine = activeRooms.some((room, roomIndex) => {
             const cellKey = `${rowIndex}-${roomIndex}`;
             const cellData = cellMap.get(cellKey);
@@ -616,10 +691,8 @@ const generateCalendarGridBody = (scheduledRoutines: ScheduledRoutine[], date: D
             return false;
           });
           
-          // Skip rows with no routines
-          if (!hasAnyRoutine) {
-            return '';
-          }
+          // Render all rows that have routines OR are within the time range
+          // This ensures routines spanning multiple rows are always visible
           
           return `
             <div class="grid-row">

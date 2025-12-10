@@ -411,7 +411,7 @@ export default function Home() {
       // Need to get the updated routine with preserved scheduledHours
       setScheduledRoutines(prev => {
         // Get the updated routine's scheduledHours by checking routines state after update
-        return prev.map(sr => {
+        const updated = prev.map(sr => {
         if (sr.routineId === saved.id) {
           // Update the routine data and recalculate endTime if duration changed
           const newDuration = saved.duration;
@@ -436,6 +436,8 @@ export default function Home() {
         }
         return sr;
         });
+        scheduledRoutinesRef.current = updated;
+        return updated;
       });
       
       toast.success('Routine saved successfully');
@@ -490,12 +492,16 @@ export default function Home() {
       setRoutines(prev => prev.map(r => r.id === updated.id ? { ...r, ...updated } : r));
       
       // Also update scheduled routines if needed
-      setScheduledRoutines(prev => prev.map(sr => {
-        if (sr.routineId === updated.id) {
-          return { ...sr, routine: { ...sr.routine, ...updated } };
-        }
-        return sr;
-      }));
+      setScheduledRoutines(prev => {
+        const updatedSchedules = prev.map(sr => {
+          if (sr.routineId === updated.id) {
+            return { ...sr, routine: { ...sr.routine, ...updated } };
+          }
+          return sr;
+        });
+        scheduledRoutinesRef.current = updatedSchedules;
+        return updatedSchedules;
+      });
       
       toast.success(newInactiveStatus ? 'Routine marked as inactive' : 'Routine marked as active');
     } catch (e: unknown) {
@@ -727,7 +733,11 @@ export default function Home() {
     }
 
     // No conflicts: apply move
-    setScheduledRoutines(prev => prev.map(sr => sr.id === routine.id ? updatedRoutine : sr));
+    setScheduledRoutines(prev => {
+      const updated = prev.map(sr => sr.id === routine.id ? updatedRoutine : sr);
+      scheduledRoutinesRef.current = updated;
+      return updated;
+    });
     console.log('Routine moved (not saved yet)');
   }, [scheduledRoutines, checkConflicts, rooms]);
 
@@ -735,7 +745,11 @@ export default function Home() {
     console.log('Deleting scheduled routine:', routine.routine.songTitle);
     
     // Remove from scheduled routines (don't delete from database yet)
-    setScheduledRoutines(prev => prev.filter(sr => sr.id !== routine.id));
+    setScheduledRoutines(prev => {
+      const updated = prev.filter(sr => sr.id !== routine.id);
+      scheduledRoutinesRef.current = updated;
+      return updated;
+    });
     
     // Update routine's scheduled hours (temporary)
     setRoutines(prev => prev.map(r => 
@@ -786,7 +800,11 @@ export default function Home() {
     }
 
     // No conflicts: apply update
-    setScheduledRoutines(prev => prev.map(sr => sr.id === id ? updated : sr));
+    setScheduledRoutines(prev => {
+      const updatedSchedules = prev.map(sr => sr.id === id ? updated : sr);
+      scheduledRoutinesRef.current = updatedSchedules;
+      return updatedSchedules;
+    });
     // Keep modal selection in sync
     setSelectedScheduledRoutine(prev => prev && prev.id === id ? updated : prev);
 
@@ -806,7 +824,11 @@ export default function Home() {
           endTime: addMinutesToTime(current.startTime, newDuration),
         };
         
-        setScheduledRoutines(prev => prev.map(sr => sr.id === id ? updated : sr));
+        setScheduledRoutines(prev => {
+          const updatedSchedules = prev.map(sr => sr.id === id ? updated : sr);
+          scheduledRoutinesRef.current = updatedSchedules;
+          return updatedSchedules;
+        });
         // Keep modal selection in sync
         setSelectedScheduledRoutine(prev => prev && prev.id === id ? updated : prev);
         
@@ -1016,6 +1038,7 @@ export default function Home() {
 
       // Update saved state with updated routines
       setScheduledRoutines(updatedScheduledRoutines);
+      scheduledRoutinesRef.current = updatedScheduledRoutines;
       setSavedScheduledRoutines(updatedScheduledRoutines);
       setHasUnsavedChanges(false);
 
@@ -1181,9 +1204,20 @@ export default function Home() {
       }
       
       console.log(`Export: Final count for PDF: ${filtered.length} schedules`);
+      console.log(`Export: ===== Export Summary =====`);
+      console.log(`Export: Total schedules in state: ${latestScheduledRoutines.length}`);
+      console.log(`Export: After date filter (${from} to ${to}): ${filtered.length}`);
+      if (levelIds.length > 0) {
+        console.log(`Export: Level filter applied: ${levelIds.join(', ')}`);
+      }
+      console.log(`Export: Sending ${filtered.length} schedules to PDF generator`);
+      console.log(`Export: =========================`);
 
           import('./utils/pdfUtils').then(({ generateSchedulePDF }) => {
+            console.log(`Export: Calling PDF generator with ${filtered.length} schedules`);
             generateSchedulePDF(filtered, dates, latestRooms);
+          }).catch(error => {
+            console.error('Export: Error generating PDF:', error);
           });
         }, 100); // Small delay to ensure all updates and effects are flushed
       });
@@ -1233,19 +1267,23 @@ export default function Home() {
       })));
       
       // Update scheduled routines that reference this dancer
-      setScheduledRoutines(prev => prev.map(sr => {
-        const updatedRoutine = sr.routine.dancers.some(d => d.id === updatedDancer.id)
-          ? {
-              ...sr.routine,
-              dancers: sr.routine.dancers.map(d => d.id === updatedDancer.id ? updatedDancer : d)
-            }
-          : sr.routine;
+      setScheduledRoutines(prev => {
+        const updated = prev.map(sr => {
+          const updatedRoutine = sr.routine.dancers.some(d => d.id === updatedDancer.id)
+            ? {
+                ...sr.routine,
+                dancers: sr.routine.dancers.map(d => d.id === updatedDancer.id ? updatedDancer : d)
+              }
+            : sr.routine;
         
-        return {
-          ...sr,
-          routine: updatedRoutine
-        };
-      }));
+          return {
+            ...sr,
+            routine: updatedRoutine
+          };
+        });
+        scheduledRoutinesRef.current = updated;
+        return updated;
+      });
       
       toast.success('Dancer updated successfully');
       setShowDancerEditModal(false);
@@ -1294,18 +1332,22 @@ export default function Home() {
       })));
       
       // Update scheduled routines that reference this dancer
-      setScheduledRoutines(prev => prev.map(sr => {
-        if (sr.routine.dancers.some(d => d.id === dancerId)) {
-          return {
-            ...sr,
-            routine: {
-              ...sr.routine,
-              dancers: sr.routine.dancers.filter(d => d.id !== dancerId)
-            }
-          };
-        }
-        return sr;
-      }));
+      setScheduledRoutines(prev => {
+        const updated = prev.map(sr => {
+          if (sr.routine.dancers.some(d => d.id === dancerId)) {
+            return {
+              ...sr,
+              routine: {
+                ...sr.routine,
+                dancers: sr.routine.dancers.filter(d => d.id !== dancerId)
+              }
+            };
+          }
+          return sr;
+        });
+        scheduledRoutinesRef.current = updated;
+        return updated;
+      });
       
       toast.success(`Dancer ${deletedDancer?.name || 'deleted'} removed successfully`);
     } catch (e: unknown) {
@@ -1337,17 +1379,21 @@ export default function Home() {
       })));
 
       // Update scheduled routines that reference these dancers
-      setScheduledRoutines(prev => prev.map(sr => {
-        const hasAny = sr.routine.dancers.some(d => dancerIds.includes(d.id));
-        if (!hasAny) return sr;
-        return {
-          ...sr,
-          routine: {
-            ...sr.routine,
-            dancers: sr.routine.dancers.filter(d => !dancerIds.includes(d.id))
-          }
-        };
-      }));
+      setScheduledRoutines(prev => {
+        const updated = prev.map(sr => {
+          const hasAny = sr.routine.dancers.some(d => dancerIds.includes(d.id));
+          if (!hasAny) return sr;
+          return {
+            ...sr,
+            routine: {
+              ...sr.routine,
+              dancers: sr.routine.dancers.filter(d => !dancerIds.includes(d.id))
+            }
+          };
+        });
+        scheduledRoutinesRef.current = updated;
+        return updated;
+      });
 
       toast.success(`Deleted ${dancerIds.length} dancer(s)` + (deletedNames.length ? `: ${deletedNames.join(', ')}` : ''));
     } catch (e: unknown) {
