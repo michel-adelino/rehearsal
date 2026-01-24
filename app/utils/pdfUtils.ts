@@ -666,33 +666,34 @@ const generateCalendarGridBody = (scheduledRoutines: ScheduledRoutine[], date: D
           const timeLabel = formatTime(hour, minute);
           
           // Check if this row has any routines (either starting here or continuing from earlier)
-          // Don't skip rows - render all rows to ensure spanning routines are visible
-          // const hasAnyRoutine = activeRooms.some((room, roomIndex) => {
-          //   const cellKey = `${rowIndex}-${roomIndex}`;
-          //   const cellData = cellMap.get(cellKey);
+          const hasAnyRoutine = activeRooms.some((room, roomIndex) => {
+            const cellKey = `${rowIndex}-${roomIndex}`;
+            const cellData = cellMap.get(cellKey);
             
-          //   // Check if there's a routine starting here
-          //   if (cellData && cellData.routine) {
-          //     return true;
-          //   }
+            // Check if there's a routine starting here
+            if (cellData && cellData.routine) {
+              return true;
+            }
             
-          //   // Check if this cell is occupied by a routine from an earlier row
-          //   for (let prevRow = rowIndex - 1; prevRow >= 0; prevRow--) {
-          //     const prevKey = `${prevRow}-${roomIndex}`;
-          //     const prevData = cellMap.get(prevKey);
-          //     if (prevData && prevData.routine) {
-          //       const rowSpan = prevData.rowSpan;
-          //       if (rowIndex < prevRow + rowSpan) {
-          //         return true;
-          //       }
-          //     }
-          //   }
+            // Check if this cell is occupied by a routine from an earlier row
+            for (let prevRow = rowIndex - 1; prevRow >= 0; prevRow--) {
+              const prevKey = `${prevRow}-${roomIndex}`;
+              const prevData = cellMap.get(prevKey);
+              if (prevData && prevData.routine) {
+                const rowSpan = prevData.rowSpan;
+                if (rowIndex < prevRow + rowSpan) {
+                  return true;
+                }
+              }
+            }
             
-          //   return false;
-          // });
+            return false;
+          });
           
-          // Render all rows that have routines OR are within the time range
-          // This ensures routines spanning multiple rows are always visible
+          // Skip rows that don't have any routines
+          if (!hasAnyRoutine) {
+            return '';
+          }
           
           return `
             <div class="grid-row">
