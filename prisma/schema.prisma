@@ -87,3 +87,12 @@ model Settings {
   visibleRooms Int    @default(4)
   updatedAt  DateTime @updatedAt
 }
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}

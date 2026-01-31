@@ -1,14 +1,18 @@
 'use client';
 
 import React from 'react';
+import { useRouter } from 'next/navigation';
+import { User } from 'lucide-react';
 import { ManageTeachersModal } from '@/app/components/modals/ManageTeachersModal';
 import { ManageGenresModal } from '@/app/components/modals/ManageGenresModal';
 import { ManageLevelsModal } from '@/app/components/modals/ManageLevelsModal';
 
 export default function SettingsPage() {
+  const router = useRouter();
   const [teachers, setTeachers] = React.useState<{ id: string; name: string; email?: string | null }[]>([]);
   const [genres, setGenres] = React.useState<{ id: string; name: string }[]>([]);
   const [levels, setLevels] = React.useState<{ id: string; name: string; color: string }[]>([]);
+  const [user, setUser] = React.useState<{ id: string; email: string; name?: string | null } | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [openTeachers, setOpenTeachers] = React.useState(false);
   const [openGenres, setOpenGenres] = React.useState(false);
@@ -18,16 +22,23 @@ export default function SettingsPage() {
     let mounted = true;
     const load = async () => {
       try {
-        const [tRes, gRes, lRes] = await Promise.all([
+        const [tRes, gRes, lRes, uRes] = await Promise.all([
           fetch('/api/teachers'),
           fetch('/api/genres'),
-          fetch('/api/levels')
+          fetch('/api/levels'),
+          fetch('/api/auth/me')
         ]);
-        const [tData, gData, lData] = await Promise.all([tRes.json(), gRes.json(), lRes.json()]);
+        const [tData, gData, lData, uData] = await Promise.all([
+          tRes.json(),
+          gRes.json(),
+          lRes.json(),
+          uRes.ok ? uRes.json() : Promise.resolve({ user: null })
+        ]);
         if (!mounted) return;
         setTeachers(tData);
         setGenres(gData);
         setLevels(lData);
+        setUser(uData.user);
       } finally {
         if (mounted) setLoading(false);
       }
@@ -45,6 +56,37 @@ export default function SettingsPage() {
           <div className="text-gray-600">Loading...</div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <section className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-lg font-medium text-gray-900">Profile</h2>
+                <button
+                  onClick={() => router.push('/profile')}
+                  className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
+                >
+                  <User className="w-4 h-4" />
+                  Manage
+                </button>
+              </div>
+              <div className="space-y-2">
+                {user ? (
+                  <>
+                    <div className="p-3 border border-gray-200 rounded-lg">
+                      <div className="text-sm text-gray-600">Email</div>
+                      <div className="font-medium text-gray-900">{user.email}</div>
+                    </div>
+                    {user.name && (
+                      <div className="p-3 border border-gray-200 rounded-lg">
+                        <div className="text-sm text-gray-600">Name</div>
+                        <div className="font-medium text-gray-900">{user.name}</div>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="p-4 text-gray-500 text-center">Not logged in</div>
+                )}
+              </div>
+            </section>
+
             <section className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-lg font-medium text-gray-900">Teachers</h2>

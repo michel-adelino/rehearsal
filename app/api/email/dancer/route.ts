@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
+import { requireAuth } from "@/app/lib/auth";
 
 // Configure route to allow longer execution time (for sending many emails)
 export const maxDuration = 300; // 5 minutes (Vercel Pro plan allows up to 300s)
@@ -377,6 +378,12 @@ function sendSSEMessage(data: unknown): string {
 }
 
 export async function POST(req: NextRequest) {
+  try {
+    await requireAuth(req);
+  } catch (error) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const startTime = Date.now();
   console.log("[EMAIL API] ===== Email sending request received =====");
 

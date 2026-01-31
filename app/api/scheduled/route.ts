@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/app/lib/prisma';
 import { Prisma } from '@prisma/client';
+import { requireAuth } from '@/app/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -58,6 +59,12 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  try {
+    await requireAuth(req);
+  } catch (error) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
     const body = await req.json();
     const { date, startMinutes, duration, routineId, roomId } = body;

@@ -10,7 +10,8 @@
     "postinstall": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
-    "db:seed": "prisma db seed"
+    "db:seed": "prisma db seed",
+    "create-user": "tsx scripts/create-user.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.18.0",

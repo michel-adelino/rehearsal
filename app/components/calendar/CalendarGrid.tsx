@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { toast } from 'react-hot-toast';
 import { Room } from '../../types/room';
 import { ScheduledRoutine } from '../../types/schedule';
 import { Routine, Level } from '../../types/routine';
@@ -8,7 +10,7 @@ import { TimeSlot } from './TimeSlot';
 import { ScheduledBlock } from './ScheduledBlock';
 import { formatTime, getShortDayName, addMinutesToTime } from '../../utils/timeUtils';
 import { findConflicts } from '../../utils/conflictUtils';
-import { ChevronLeft, ChevronRight, Calendar, Save, AlertCircle, ChevronDown, CheckCircle2, Loader2, XCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, AlertCircle, ChevronDown, CheckCircle2, Loader2, XCircle, User, LogOut } from 'lucide-react';
 
 interface CalendarGridProps {
   rooms: Room[];
@@ -40,7 +42,6 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
   onDeleteRoutine,
   visibleRooms,
   hasUnsavedChanges = false,
-  onSaveChanges,
   onResizeRoutineDuration,
   saveStatus = 'idle' as 'idle' | 'saving' | 'saved' | 'error',
   saveError = null,
@@ -49,6 +50,19 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
   onLevelIdsChange,
   onViewDatesChange
 }) => {
+  const router = useRouter();
+
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      toast.success('Logged out successfully');
+      router.push('/login');
+    } catch (error) {
+      console.error('Logout error:', error);
+      toast.error('Failed to logout');
+      router.push('/login');
+    }
+  };
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<ViewMode>('4days');
   const [startHour, setStartHour] = useState(6);
@@ -317,6 +331,26 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
           </div>
           
           <div className="flex items-center gap-4">
+            {/* Profile and Logout Buttons */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => router.push('/profile')}
+                className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                title="Profile"
+              >
+                <User className="w-4 h-4" />
+                <span className="hidden sm:inline">Profile</span>
+              </button>
+              <button
+                onClick={handleLogout}
+                className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                title="Logout"
+              >
+                <LogOut className="w-4 h-4" />
+                <span className="hidden sm:inline">Logout</span>
+              </button>
+            </div>
+            
             {/* Save Status Indicators */}
             <div className="flex items-center gap-2">
               {saveStatus === 'saving' && (

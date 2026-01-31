@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/app/lib/prisma';
+import { requireAuth } from '@/app/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,6 +20,12 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  try {
+    await requireAuth(req);
+  } catch (error) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const body = await req.json();
   const { songTitle, duration, notes, levelId, color, teacherId, genreId, dancerIds, isInactive } = body;
 
@@ -54,9 +61,15 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  try {
+    await requireAuth(req);
+  } catch (error) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   await prisma.routine.delete({ where: { id: params.id } });
   return NextResponse.json({ ok: true });
 }

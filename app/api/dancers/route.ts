@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/app/lib/prisma';
+import { requireAuth } from '@/app/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,6 +21,12 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  try {
+    await requireAuth(req);
+  } catch (error) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const body = await req.json();
 
   // Support single or bulk create
@@ -62,6 +69,12 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  try {
+    await requireAuth(req);
+  } catch (error) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
     const { searchParams } = new URL(req.url);
     const idsParam = searchParams.get('ids');

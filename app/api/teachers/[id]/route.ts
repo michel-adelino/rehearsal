@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/app/lib/prisma';
+import { requireAuth } from '@/app/lib/auth';
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+  try {
+    await requireAuth(req);
+  } catch (error) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const body = await req.json();
   const { name, email } = body as { name?: string; email?: string | null };
   const data: { name?: string; email?: string | null } = {};
@@ -11,7 +18,13 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   return NextResponse.json(updated);
 }
 
-export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+  try {
+    await requireAuth(req);
+  } catch (error) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   // Cascade delete: Deleting a teacher will automatically delete all associated routines
   // and their scheduled routines due to onDelete: Cascade in the schema
   await prisma.teacher.delete({ where: { id: params.id } });

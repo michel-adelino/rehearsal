@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/app/lib/prisma';
 import { Prisma } from '@prisma/client';
+import { requireAuth } from '@/app/lib/auth';
 
 // Helper to parse YYYY-MM-DD to UTC Date (midnight UTC)
 // This ensures dates are stored consistently regardless of server timezone
@@ -13,6 +14,12 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  try {
+    await requireAuth(req);
+  } catch (error) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
     const body = await req.json();
     const { date, startMinutes, duration, routineId, roomId } = body;
@@ -149,9 +156,15 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  try {
+    await requireAuth(req);
+  } catch (error) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
     console.log('[SCHEDULED API] DELETE request received:', { id: params.id });
 
