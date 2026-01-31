@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 import { Loader2 } from 'lucide-react';
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [email, setEmail] = useState('');
@@ -21,7 +21,7 @@ export default function LoginPage() {
           const redirect = searchParams.get('redirect') || '/';
           router.push(redirect);
         }
-      } catch (error) {
+      } catch {
         // Not authenticated, stay on login page
       }
     };
@@ -50,7 +50,7 @@ export default function LoginPage() {
       toast.success('Login successful');
       const redirect = searchParams.get('redirect') || '/';
       router.push(redirect);
-    } catch (error) {
+    } catch {
       toast.error('An error occurred during login');
       setIsLoading(false);
     }
@@ -114,5 +114,25 @@ export default function LoginPage() {
         </form>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+        <div className="max-w-md w-full bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+          <div className="text-center mb-8">
+            <h1 className="text-3xl font-semibold text-gray-900 mb-2">RehearsalHub</h1>
+            <p className="text-gray-600">Sign in to your account</p>
+          </div>
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+          </div>
+        </div>
+      </div>
+    }>
+      <LoginForm />
+    </Suspense>
   );
 }
